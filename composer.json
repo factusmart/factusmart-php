@@ -4,7 +4,8 @@
     "type": "library",
     "license": "MIT",
     "keywords": ["factusmart", "sunat", "facturacion electronica", "peru", "cpe", "boleta", "factura", "ubl"],
-    "homepage": "https://factusmart.pe/api-facturacion-electronica/docs",
+    "homepage": "https://factusmart.pe/api-facturacion-electronica/docs/sdks",
+    "support": { "source": "https://github.com/factusmart/factusmart-php" },
     "authors": [
         {
             "name": "FactuSmart",

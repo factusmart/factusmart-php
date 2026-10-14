@@ -20,7 +20,7 @@
         <env name="FACTUSMART_API_KEY" value="test_apikey_demo_123" force="false"/>
         <env name="FACTUSMART_RUC" value="20777666555" force="false"/>
         <env name="FACTUSMART_VERIFICAR_SSL" value="0" force="false"/>
-        <env name="FACTUSMART_OPENAPI" value="C:/laragon/www/factusmart/docs/api/openapi.yaml" force="false"/>
+        <env name="FACTUSMART_OPENAPI" value="tests/fixtures/openapi.yaml" force="false"/>
     </php>
     <source>
         <include>
