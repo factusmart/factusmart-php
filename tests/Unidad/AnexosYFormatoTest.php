@@ -23,7 +23,7 @@ final class AnexosYFormatoTest extends TestCase
         return new Cliente($extra + [
             'apiKey' => 'k',
             'baseUrl' => self::BASE . '/',
-            'ruc' => '20123456789',
+            'ruc' => '20100070970',
             'transporte' => $t,
             'dormir' => static function (float $s): void {
             },
@@ -43,7 +43,7 @@ final class AnexosYFormatoTest extends TestCase
 
         $this->assertSame($respuesta, $c->establecimientos->listar());
         $this->assertSame('GET', $t->peticiones[0]['metodo']);
-        $this->assertSame(self::BASE . '/establecimientos?ruc=20123456789', $t->peticiones[0]['url']);
+        $this->assertSame(self::BASE . '/establecimientos?ruc=20100070970', $t->peticiones[0]['url']);
         $this->assertNull($t->peticiones[0]['cuerpo']);
 
         $c->establecimientos->listar(['ruc' => '20111111111']);
@@ -80,7 +80,7 @@ final class AnexosYFormatoTest extends TestCase
         $this->assertSame(self::BASE . '/establecimientos', $p['url'], 'El ruc va en el cuerpo, no en la query');
         $this->assertSame('application/json', $p['cabeceras']['Content-Type']);
         $this->assertArrayNotHasKey('Idempotency-Key', $p['cabeceras']);
-        $this->assertSame($datos + ['ruc' => '20123456789'], json_decode((string) $p['cuerpo'], true));
+        $this->assertSame($datos + ['ruc' => '20100070970'], json_decode((string) $p['cuerpo'], true));
 
         $c->establecimientos->crear($datos, ['ruc' => '20111111111']);
         $this->assertSame('20111111111', json_decode((string) $t->peticiones[1]['cuerpo'], true)['ruc']);
@@ -134,7 +134,7 @@ final class AnexosYFormatoTest extends TestCase
         $this->assertSame($respuesta, $c->catalogos->buscarProductoSunat('computador'));
         $this->assertCount(2, $t->peticiones, 'Se reintenta como un GET');
         $this->assertSame('GET', $t->peticiones[1]['metodo']);
-        $this->assertSame(self::BASE . '/catalogos/productos-sunat?q=computador&ruc=20123456789', $t->peticiones[1]['url']);
+        $this->assertSame(self::BASE . '/catalogos/productos-sunat?q=computador&ruc=20100070970', $t->peticiones[1]['url']);
 
         $c->catalogos->buscarProductoSunat('silla oficina', ['limite' => 5, 'nivel' => 'producto', 'ruc' => '20111111111']);
         $this->assertSame(self::BASE . '/catalogos/productos-sunat?q=silla%20oficina&limite=5&nivel=producto&ruc=20111111111', $t->peticiones[2]['url']);
@@ -148,7 +148,7 @@ final class AnexosYFormatoTest extends TestCase
         $t = new TransporteFalso([self::pdf(), self::pdf()]);
         $c = $this->cliente($t);
         $this->assertSame('%PDF-1.4 falso', $c->comprobantes->descargar('abc', 'pdf'));
-        $this->assertSame(self::BASE . '/documents/abc/pdf?ruc=20123456789', $t->peticiones[0]['url']);
+        $this->assertSame(self::BASE . '/documents/abc/pdf?ruc=20100070970', $t->peticiones[0]['url']);
 
         $c->comprobantes->descargar('abc', 'pdf', ['formato' => '']);
         $this->assertStringNotContainsString('formato', $t->peticiones[1]['url']);
@@ -161,7 +161,7 @@ final class AnexosYFormatoTest extends TestCase
 
         $c->comprobantes->descargar('abc', 'pdf', ['formato' => 'ticket']);
         $this->assertSame('GET', $t->peticiones[0]['metodo']);
-        $this->assertSame(self::BASE . '/documents/abc/pdf?ruc=20123456789&formato=ticket', $t->peticiones[0]['url']);
+        $this->assertSame(self::BASE . '/documents/abc/pdf?ruc=20100070970&formato=ticket', $t->peticiones[0]['url']);
 
         $c->comprobantes->descargar('abc', 'PDF', ['formato' => 'Ticket58', 'ruc' => '20111111111']);
         $this->assertSame(self::BASE . '/documents/abc/pdf?ruc=20111111111&formato=ticket58', $t->peticiones[1]['url']);

@@ -30,7 +30,7 @@ final class CodigosYWebhooksTest extends TestCase
         return new Cliente([
             'apiKey' => 'k',
             'baseUrl' => 'https://ejemplo.test/api/v1/issuer',
-            'ruc' => '20123456789',
+            'ruc' => '20100070970',
             'transporte' => $t,
             'dormir' => function (float $s): void {
                 $this->esperas++;
@@ -201,7 +201,7 @@ final class CodigosYWebhooksTest extends TestCase
             'guias.emitir' => fn (Cliente $c) => $c->guias->emitir(['codigo_tipo_documento' => '09']),
             'comprobantes.reenviar' => fn (Cliente $c) => $c->comprobantes->reenviar('abc'),
             'comprobantes.consultarSunat' => fn (Cliente $c) => $c->comprobantes->consultarSunat('abc'),
-            'rucs.activar' => fn (Cliente $c) => $c->rucs->activar('20123456789', false),
+            'rucs.activar' => fn (Cliente $c) => $c->rucs->activar('20100070970', false),
         ];
         foreach ($operaciones as $nombre => $op) {
             foreach (['ERROR_INTERNO' => 500, 'SUNAT_NO_DISPONIBLE' => 503] as $codigo => $status) {

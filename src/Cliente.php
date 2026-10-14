@@ -23,7 +23,7 @@ use FactuSmart\Recursos\Series;
  *   $fs = new FactuSmart\Cliente([
  *       'apiKey'  => 'TU_API_KEY',
  *       'baseUrl' => 'https://TU_URL_BASE/api/v1/issuer',
- *       'ruc'     => '20123456789',
+ *       'ruc'     => '20100070970',
  *   ]);
  *   $r = $fs->comprobantes->emitir([...]);
  */

@@ -30,7 +30,7 @@ final class ReintentosYErroresTest extends TestCase
         return new Cliente($extra + [
             'apiKey' => 'k',
             'baseUrl' => 'https://ejemplo.test/api/v1/issuer/',
-            'ruc' => '20123456789',
+            'ruc' => '20100070970',
             'transporte' => $t,
             'dormir' => function (float $s): void {
                 $this->esperas[] = $s;
@@ -262,17 +262,17 @@ final class ReintentosYErroresTest extends TestCase
         $c = $this->cliente($t);
         $c->catalogos->listar();
         $this->assertSame('GET', $t->peticiones[0]['metodo']);
-        $this->assertSame('https://ejemplo.test/api/v1/issuer/catalogos?ruc=20123456789', $t->peticiones[0]['url']);
+        $this->assertSame('https://ejemplo.test/api/v1/issuer/catalogos?ruc=20100070970', $t->peticiones[0]['url']);
 
         $r = $c->catalogos->consultar('unidades', ['q' => 'kilo gr']);
         $this->assertSame('unidades', $r['catalogo']);
-        $this->assertSame('https://ejemplo.test/api/v1/issuer/catalogos/unidades?q=kilo%20gr&ruc=20123456789', $t->peticiones[1]['url']);
+        $this->assertSame('https://ejemplo.test/api/v1/issuer/catalogos/unidades?q=kilo%20gr&ruc=20100070970', $t->peticiones[1]['url']);
 
         $c->catalogos->consultar('03', ['ruc' => '20111111111']);
         $this->assertSame('https://ejemplo.test/api/v1/issuer/catalogos/03?ruc=20111111111', $t->peticiones[2]['url']);
 
         $c->catalogos->consultar('a/b');
-        $this->assertSame('https://ejemplo.test/api/v1/issuer/catalogos/a%2Fb?ruc=20123456789', $t->peticiones[3]['url']);
+        $this->assertSame('https://ejemplo.test/api/v1/issuer/catalogos/a%2Fb?ruc=20100070970', $t->peticiones[3]['url']);
     }
 
     public function testValidacionLaravelSeVuelveMensajeLegible(): void
@@ -294,7 +294,7 @@ final class ReintentosYErroresTest extends TestCase
             fn (Cliente $c) => $c->guias->emitir(['codigo_tipo_documento' => '09']),
             fn (Cliente $c) => $c->comprobantes->reenviar('abc'),
             fn (Cliente $c) => $c->comprobantes->consultarSunat('abc'),
-            fn (Cliente $c) => $c->rucs->activar('20123456789', false),
+            fn (Cliente $c) => $c->rucs->activar('20100070970', false),
         ];
         foreach ($operaciones as $i => $op) {
             foreach ([new ErrorDeRed('timeout'), TransporteFalso::json(503, ['success' => false, 'message' => 'caído'])] as $falla) {
@@ -342,7 +342,7 @@ final class ReintentosYErroresTest extends TestCase
         $this->assertSame('POST', $t->peticiones[0]['metodo']);
         $this->assertSame('https://ejemplo.test/api/v1/issuer/documents', $t->peticiones[0]['url']);
         $this->assertSame('k', $t->peticiones[0]['cabeceras']['X-API-Key']);
-        $this->assertSame('20123456789', $cuerpo['ruc']);
+        $this->assertSame('20100070970', $cuerpo['ruc']);
         $this->assertSame('#', $cuerpo['numero_documento']);
         $this->assertSame('0101', $cuerpo['codigo_tipo_operacion']);
         $this->assertSame('PEN', $cuerpo['codigo_tipo_moneda']);
@@ -375,7 +375,7 @@ final class ReintentosYErroresTest extends TestCase
         $t = new TransporteFalso([TransporteFalso::json(200, ['success' => true]), TransporteFalso::json(200, ['success' => true]), new Respuesta(200, [], '%PDF-1.4')]);
         $c = $this->cliente($t);
         $c->comprobantes->listar(['estado' => '01', 'limite' => 5]);
-        $this->assertSame('https://ejemplo.test/api/v1/issuer/documents?estado=01&limite=5&ruc=20123456789', $t->peticiones[0]['url']);
+        $this->assertSame('https://ejemplo.test/api/v1/issuer/documents?estado=01&limite=5&ruc=20100070970', $t->peticiones[0]['url']);
         $c->cuenta->saldo();
         $this->assertSame('https://ejemplo.test/api/v1/issuer/account', $t->peticiones[1]['url']);
         $this->assertSame('%PDF-1.4', $c->comprobantes->descargar('a/b', 'PDF', ['ruc' => '20111111111']));

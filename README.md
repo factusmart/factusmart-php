@@ -18,7 +18,7 @@ composer require factusmart/sdk
 ## Uso en 10 líneas
 
 ```php
-$fs = new FactuSmart\Cliente(['apiKey' => 'TU_API_KEY', 'baseUrl' => 'https://TU_URL_BASE/api/v1/issuer', 'ruc' => '20123456789']);
+$fs = new FactuSmart\Cliente(['apiKey' => 'TU_API_KEY', 'baseUrl' => 'https://TU_URL_BASE/api/v1/issuer', 'ruc' => '20100070970']);
 
 ['items' => $items, 'totales' => $totales] = FactuSmart\Cliente::calcularComprobante([
     ['descripcion' => 'Servicio de consultoría', 'cantidad' => 1, 'valor_unitario' => 100, 'afectacion' => '10'],
@@ -26,7 +26,7 @@ $fs = new FactuSmart\Cliente(['apiKey' => 'TU_API_KEY', 'baseUrl' => 'https://TU
 
 $r = $fs->comprobantes->emitir([
     'codigo_tipo_documento' => '01',
-    'datos_del_cliente_o_receptor' => ['codigo_tipo_documento_identidad' => '6', 'numero_documento' => '20555555555'],
+    'datos_del_cliente_o_receptor' => ['codigo_tipo_documento_identidad' => '6', 'numero_documento' => '20131312955'],
     'items' => $items, 'totales' => $totales,
 ]);
 
@@ -223,7 +223,7 @@ try {
 } catch (ErrorDeValidacion $e) {
     echo "Corrige los datos: {$e->mensaje}";
 } catch (SinCreditos $e) {
-    echo 'Recarga créditos';
+    echo 'Sube de plan o pide créditos extra para tu plan';
 } catch (FactuSmartError $e) {
     echo "Error {$e->status} {$e->codigo}: {$e->mensaje}";
 }
@@ -234,7 +234,7 @@ Códigos más comunes:
 | `codigo` | Qué pasó |
 |---|---|
 | `NO_AUTENTICADO` | API key inválida o ausente |
-| `PLAN_VENCIDO` / `SIN_CREDITOS` | renueva el plan / recarga créditos |
+| `PLAN_VENCIDO` / `SIN_CREDITOS` | renueva el plan / sube de plan o pide créditos extra para tu plan |
 | `RUC_NO_AUTORIZADO` / `RUC_DESACTIVADO` / `RUC_REQUERIDO` | problema con el RUC emisor |
 | `DATOS_INVALIDOS` | revisa `$e->campos` |
 | `NO_ENCONTRADO` | el comprobante, guía, ticket o RUC no existe |
