@@ -20,7 +20,7 @@ $fs = new Cliente([
 try {
     $r = $fs->comprobantes->emitir([
         'codigo_tipo_documento' => '03',
-        'datos_del_cliente_o_receptor' => ['codigo_tipo_documento_identidad' => '1', 'numero_documento' => '77344962'],
+        'datos_del_cliente_o_receptor' => ['codigo_tipo_documento_identidad' => '1', 'numero_documento' => '12345678'],
         'items' => $items,
         'totales' => $totales,
     ], ['idempotencyKey' => 'venta-123']);   // el id de la venta en TU sistema

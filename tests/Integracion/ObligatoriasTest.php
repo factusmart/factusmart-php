@@ -42,7 +42,7 @@ final class ObligatoriasTest extends TestCase
             'codigo_tipo_documento' => '03',
             'datos_del_cliente_o_receptor' => [
                 'codigo_tipo_documento_identidad' => '1',
-                'numero_documento' => '77344962',
+                'numero_documento' => '12345678',
                 'apellidos_y_nombres_o_razon_social' => 'CLIENTE PRUEBA SDK PHP',
             ],
             'items' => $calculo['items'],

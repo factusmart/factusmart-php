@@ -295,7 +295,7 @@ paths:
                   codigo_tipo_moneda: PEN
                   datos_del_cliente_o_receptor:
                     codigo_tipo_documento_identidad: "1"
-                    numero_documento: "77344962"
+                    numero_documento: "12345678"
                   totales:
                     total_operaciones_gravadas: 50.00
                     total_igv: 9.00
