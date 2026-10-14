@@ -51,6 +51,8 @@ final class Cliente
         'listRucs' => ['rucs', 'listar'],
         'createRuc' => ['rucs', 'crear'],
         'setRucActivation' => ['rucs', 'activar'],
+        // Webhook (lo envía el API a tu servidor): el SDK aporta la verificación de la firma.
+        'webhookComprobanteEstado' => [null, 'verificarFirmaWebhook'],
     ];
 
     /** Afectaciones que entiende calcularComprobante(). */
