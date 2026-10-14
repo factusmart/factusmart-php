@@ -126,6 +126,28 @@ final class Cliente
     }
 
     /**
+     * Verifica que un webhook lo mandó FactuSmart.
+     *
+     * FactuSmart firma cada webhook con el header `X-FactuSmart-Firma` =
+     * HMAC-SHA256 del cuerpo CRUDO con tu secreto de webhooks, en hex (64 caracteres, sin prefijo).
+     *
+     *   $cuerpo = file_get_contents('php://input');   // crudo: NO json_decode + json_encode
+     *   $firma  = $_SERVER['HTTP_X_FACTUSMART_FIRMA'] ?? '';
+     *   if (!FactuSmart\Cliente::verificarFirmaWebhook($cuerpo, $firma, $secreto)) { http_response_code(401); exit; }
+     *
+     * Nunca lanza excepción: firma o secreto vacíos, o firma que no sea 64 hex, devuelven false.
+     * Compara en tiempo constante (hash_equals).
+     */
+    public static function verificarFirmaWebhook(string $cuerpoCrudo, string $firma, string $secreto): bool
+    {
+        $firma = strtolower(trim($firma));
+        if ($secreto === '' || !preg_match('/^[0-9a-f]{64}$/D', $firma)) {
+            return false;
+        }
+        return hash_equals(hash_hmac('sha256', $cuerpoCrudo, $secreto), $firma);
+    }
+
+    /**
      * Calcula IGV y totales. Recibe ítems con:
      *   descripcion, cantidad, valor_unitario (SIN IGV), afectacion ('10' gravado 18%,
      *   '20' exonerado, '30' inafecto, '40' exportación) y opcional codigo_interno, unidad_de_medida (NIU).

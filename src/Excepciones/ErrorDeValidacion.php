@@ -8,7 +8,7 @@ namespace FactuSmart\Excepciones;
  * HTTP 422: datos inválidos, falta el RUC, o el motor de emisión falló.
  * El crédito NO se cobra.
  *
- * $errores trae el mapa campo => [mensajes] cuando el API lo devuelve
+ * $errores (igual que $campos) trae el mapa campo => [mensajes] cuando el API lo devuelve
  * (validación Laravel); si no, queda vacío y todo está en $mensaje.
  */
 class ErrorDeValidacion extends FactuSmartError

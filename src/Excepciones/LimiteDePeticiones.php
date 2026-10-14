@@ -7,8 +7,8 @@ namespace FactuSmart\Excepciones;
 /**
  * Límite de peticiones superado (120/min por API key, 60/min por IP).
  *
- * Ojo: hoy el API responde HTTP 500 con "Too Many Attempts." en vez de 429;
- * el SDK reconoce ambos casos. $segundosDeEspera es null si no se pudo leer.
+ * El API responde 429 con codigo LIMITE_PETICIONES; servidores viejos respondían HTTP 500
+ * con "Too Many Attempts.". El SDK reconoce todos los casos. $segundosDeEspera es null si no se pudo leer.
  */
 class LimiteDePeticiones extends FactuSmartError
 {

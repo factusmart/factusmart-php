@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace FactuSmart\Pruebas\Integracion;
 
 use FactuSmart\Cliente;
+use FactuSmart\Codigos;
 use FactuSmart\Excepciones\ErrorDeAutenticacion;
 use FactuSmart\Excepciones\ErrorDeValidacion;
+use FactuSmart\Excepciones\NoEncontrado;
 use PHPUnit\Framework\Attributes\Depends;
 use PHPUnit\Framework\TestCase;
 
@@ -127,7 +129,24 @@ final class ObligatoriasTest extends TestCase
         } catch (ErrorDeAutenticacion $e) {
             $this->assertSame(401, $e->status);
             $this->assertNotSame('', $e->mensaje);
-            self::log("[P6] {$e->status}: {$e->mensaje}");
+            $this->assertSame(Codigos::NO_AUTENTICADO, $e->codigo);
+            $this->assertFalse($e->reintentable);
+            self::log("[P6] {$e->status} {$e->codigo}: {$e->mensaje}");
+        }
+    }
+
+    public function testP6bDescargaDeComprobanteInexistenteEsNoEncontradoConCodigo(): void
+    {
+        try {
+            // UUID con formato válido que no existe: la ruta casa, el comprobante no.
+            self::cliente()->comprobantes->descargar('00000000-0000-4000-8000-' . bin2hex(random_bytes(6)), 'pdf');
+            $this->fail('Debió lanzar NoEncontrado');
+        } catch (NoEncontrado $e) {
+            $this->assertSame(404, $e->status);
+            $this->assertSame(Codigos::NO_ENCONTRADO, $e->codigo);
+            $this->assertFalse($e->reintentable);
+            $this->assertStringNotContainsString('<html', $e->mensaje);
+            self::log("[P6b] {$e->status} {$e->codigo}: {$e->mensaje}");
         }
     }
 
@@ -141,7 +160,9 @@ final class ObligatoriasTest extends TestCase
             $this->assertSame(422, $e->status);
             $this->assertGreaterThan(10, mb_strlen($e->mensaje));
             $this->assertDoesNotMatchRegularExpression('/^Array|^\{/', $e->mensaje);
-            self::log("[P7] {$e->status}: {$e->mensaje}");
+            $this->assertSame(Codigos::DATOS_INVALIDOS, $e->codigo);
+            $this->assertFalse($e->reintentable);
+            self::log("[P7] {$e->status} {$e->codigo}: {$e->mensaje}");
         }
     }
 

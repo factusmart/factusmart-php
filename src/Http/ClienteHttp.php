@@ -17,9 +17,12 @@ use FactuSmart\Excepciones\SinCreditos;
  */
 final class ClienteHttp
 {
-    public const VERSION = '1.0.0';
+    public const VERSION = '0.2.0';
 
-    /** Estados HTTP que se reintentan (si la operación es reintentable). */
+    /**
+     * Estados HTTP que se reintentan (si la operación es reintentable). Además se
+     * reintenta cualquier error cuyo cuerpo diga `reintentable: true`.
+     */
     private const ESTADOS_REINTENTABLES = [429, 502, 503, 504];
 
     /** @var callable(float):void */
@@ -110,6 +113,9 @@ final class ClienteHttp
                 in_array($respuesta->status, self::ESTADOS_REINTENTABLES, true)
                 || $error instanceof LimiteDePeticiones
                 || ($reintentar409 && $respuesta->status === 409)
+                // Señal del propio API (ERROR_INTERNO, SUNAT_NO_DISPONIBLE...). Solo cuenta si la
+                // operación ya es reintentable: anular, emitir guía, reenviar, etc. nunca se repiten.
+                || $error->reintentable
             );
 
             if ($puedeReintentar && $intento < $this->maxReintentos) {
@@ -152,8 +158,10 @@ final class ClienteHttp
 
         [$mensaje, $errores] = $this->extraerMensaje($datos, $status);
 
-        // El API hoy convierte el 429 en 500 "Too Many Attempts." (ver openapi.yaml).
-        $esLimite = $status === 429 || stripos($mensaje, 'Too Many Attempts') !== false;
+        // Servidores viejos convertían el 429 en 500 "Too Many Attempts.".
+        $esLimite = $status === 429
+            || (is_array($datos) && ($datos['codigo'] ?? null) === 'LIMITE_PETICIONES')
+            || stripos($mensaje, 'Too Many Attempts') !== false;
         if ($esLimite) {
             return new LimiteDePeticiones(
                 'Límite de peticiones superado. ' . $mensaje,
@@ -191,7 +199,8 @@ final class ClienteHttp
 
         $mensaje = $datos['message'] ?? $datos['mensaje'] ?? null;
         if (is_string($mensaje) && $mensaje !== '') {
-            return [$mensaje, []];
+            // Desde la versión del API con `codigo`, el mapa de validación viene en `campos`.
+            return [$mensaje, FactuSmartError::normalizarCampos($datos['campos'] ?? null)];
         }
 
         // Mapa de validación: o viene dentro de "message", o es el cuerpo entero.

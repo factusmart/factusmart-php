@@ -126,8 +126,17 @@ $r = FactuSmart\Cliente::calcularComprobante([
 ## Errores
 
 Todas las excepciones heredan de `FactuSmart\Excepciones\FactuSmartError` y traen:
-`$e->status` (HTTP, `0` si fue de red), `$e->mensaje` (el `message` del API, en español) y
-`$e->respuesta` (el cuerpo completo).
+
+- `$e->status`: HTTP (`0` si fue de red).
+- `$e->mensaje`: el `message` del API, en español, para mostrar.
+- `$e->codigo`: código estable en MAYÚSCULAS para decidir en tu código (constantes en `FactuSmart\Codigos`).
+  `null` si no hubo respuesta o el servidor aún no lo manda.
+- `$e->reintentable`: `true` si el API dice que repetir la misma petición puede funcionar; `false` si no
+  (o si el servidor no lo manda).
+- `$e->campos`: en los 422, mapa campo → lista de mensajes. Vacío si no aplica.
+- `$e->respuesta`: el cuerpo completo.
+
+Decide por `$e->codigo`, nunca por el texto de `$e->mensaje` (puede cambiar).
 
 | HTTP | Excepción | Cuándo |
 |---|---|---|
@@ -149,9 +158,50 @@ try {
 } catch (SinCreditos $e) {
     echo 'Recarga créditos';
 } catch (FactuSmartError $e) {
-    echo "Error {$e->status}: {$e->mensaje}";
+    echo "Error {$e->status} {$e->codigo}: {$e->mensaje}";
 }
 ```
+
+Códigos más comunes:
+
+| `codigo` | Qué pasó |
+|---|---|
+| `NO_AUTENTICADO` | API key inválida o ausente |
+| `PLAN_VENCIDO` / `SIN_CREDITOS` | renueva el plan / recarga créditos |
+| `RUC_NO_AUTORIZADO` / `RUC_DESACTIVADO` / `RUC_REQUERIDO` | problema con el RUC emisor |
+| `DATOS_INVALIDOS` | revisa `$e->campos` |
+| `NO_ENCONTRADO` | el comprobante, guía, ticket o RUC no existe |
+| `EMISION_EN_CURSO` | otra petición con la misma `Idempotency-Key` sigue en curso |
+| `SUNAT_NO_DISPONIBLE` | SUNAT no responde; reintentable |
+| `LIMITE_PETICIONES` | espera `$e->segundosDeEspera` |
+| `ERROR_INTERNO` | error del servidor; reintentable |
+
+Lista completa en `FactuSmart\Codigos` (también `SIN_PERMISO`, `RUTA_NO_ENCONTRADA`, `METODO_NO_PERMITIDO`,
+`CONFLICTO`, `RUC_SIN_TENANT`, `CERTIFICADO_NO_CONFIGURADO`, `ERROR_EMISION`, `RECHAZADO_SUNAT`,
+`REENVIO_FALLIDO`, y `ERROR_<status>` cuando no hay uno específico).
+
+## Verificar webhooks
+
+FactuSmart firma cada webhook con el header `X-FactuSmart-Firma` (HMAC-SHA256 del cuerpo con tu secreto
+de webhooks). Verifícalo antes de confiar en el contenido:
+
+```php
+$cuerpo = file_get_contents('php://input');              // el cuerpo CRUDO, tal cual llegó
+$firma  = $_SERVER['HTTP_X_FACTUSMART_FIRMA'] ?? '';
+
+if (!FactuSmart\Cliente::verificarFirmaWebhook($cuerpo, $firma, getenv('FACTUSMART_WEBHOOK_SECRETO'))) {
+    http_response_code(401);
+    exit;
+}
+$evento = json_decode($cuerpo, true);
+// ... procesa $evento ...
+http_response_code(200);
+```
+
+> **Usa el cuerpo crudo.** Si haces `json_decode` y luego `json_encode`, los bytes cambian (espacios,
+> escapes, orden) y la firma ya no coincide. En frameworks: `$request->getContent()` (Laravel/Symfony).
+
+Nunca lanza excepción: firma o secreto vacíos, o una firma que no sea de 64 caracteres hex, devuelven `false`.
 
 
 ## Reintentos e idempotencia
@@ -162,7 +212,8 @@ try {
   Si vuelves a llamar con la misma clave, el API devuelve el mismo comprobante sin cobrar otra vez.
 - Se reintenta solo ante error de red/timeout, HTTP 429, 502, 503 y 504,
   esperando 1 s, 2 s, 4 s… (o lo que diga `Retry-After` / "Espera N segundos"). En `emitir`, también el
-  `409` ("emisión en curso con esa Idempotency-Key").
+  `409` ("emisión en curso con esa Idempotency-Key"). Y cualquier error cuyo cuerpo diga
+  `reintentable: true` (p.ej. `ERROR_INTERNO`, `SUNAT_NO_DISPONIBLE`), solo en las operaciones de abajo.
 - Se reintentan: todas las consultas (GET), `comprobantes->emitir()` y `rucs->crear()` (idempotente por RUC).
 - **Nunca** se reintentan solos: `anulaciones->crear()`, `guias->emitir()`, `comprobantes->reenviar()`,
   `comprobantes->consultarSunat()`, `rucs->activar()`.
