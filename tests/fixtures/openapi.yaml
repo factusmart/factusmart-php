@@ -75,10 +75,9 @@ info:
     - `120` peticiones/minuto **por API key** (limitador `issuer`).
     - Además, el grupo de rutas `api` aplica `60` peticiones/minuto **por IP** antes de autenticar.
 
-    **Atención:** al superar cualquiera de los dos límites, el manejador de excepciones actual responde
-    **HTTP 500** con `{"success": false, "message": "Too Many Attempts.", "file": ..., "line": ...}`,
-    no `429`, y sin header `Retry-After`. Trata ese mensaje como límite alcanzado y reintenta tras unos
-    segundos.
+    Al superar cualquiera de los dos límites la respuesta es **HTTP 429** con el header `Retry-After`
+    (segundos) y `{"success": false, "message": "Demasiadas peticiones. Espera N segundos e intenta de nuevo.", "retry_after": N}`.
+    Espera esos segundos y reintenta.
 
     ## Errores de validación
 
@@ -153,6 +152,8 @@ paths:
           $ref: '#/components/responses/RucForbidden'
         '422':
           $ref: '#/components/responses/RucWithoutTenant'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -175,6 +176,8 @@ paths:
           $ref: '#/components/responses/RucForbidden'
         '422':
           $ref: '#/components/responses/RucWithoutTenant'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -210,6 +213,8 @@ paths:
           $ref: '#/components/responses/RucForbidden'
         '422':
           $ref: '#/components/responses/RucRequired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -484,6 +489,8 @@ paths:
                   value:
                     success: false
                     message: Indica el RUC emisor en el campo "ruc" (tu cuenta tiene varios RUCs enlazados).
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -544,6 +551,8 @@ paths:
                   - $ref: '#/components/schemas/Error'
                   - $ref: '#/components/schemas/ValidationErrorMap'
                   - $ref: '#/components/schemas/ErrorWithDebug'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -574,6 +583,8 @@ paths:
           $ref: '#/components/responses/DocumentNotFound'
         '422':
           $ref: '#/components/responses/RucRequired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -619,6 +630,8 @@ paths:
               schema: { type: string }
         '422':
           $ref: '#/components/responses/RucRequired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -663,6 +676,8 @@ paths:
                 anyOf:
                   - $ref: '#/components/schemas/ResendResponse'
                   - $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -703,6 +718,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -731,6 +748,8 @@ paths:
           $ref: '#/components/responses/DocumentNotFound'
         '422':
           $ref: '#/components/responses/RucRequired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -784,6 +803,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -825,6 +846,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -912,6 +935,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -949,6 +974,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -967,6 +994,8 @@ paths:
                 $ref: '#/components/schemas/RucListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
     post:
@@ -1068,6 +1097,8 @@ paths:
               example: { success: false, message: 'Ese RUC no pertenece a esta cuenta o no existe.' }
         '422':
           $ref: '#/components/responses/LaravelValidation'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/ServerErrorOrRateLimit'
 
@@ -1174,11 +1205,29 @@ components:
               - $ref: '#/components/schemas/ValidationErrorMap'
               - $ref: '#/components/schemas/ErrorWithDebug'
           example: { activo: [El campo activo es obligatorio.] }
+    RateLimited:
+      description: |
+        Límite de peticiones superado (120/min por API key, 60/min por IP). Espera los segundos
+        indicados en `Retry-After` (o `retry_after`) y reintenta.
+      headers:
+        Retry-After:
+          description: Segundos a esperar antes de reintentar.
+          schema: { type: integer }
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, example: false }
+              message: { type: string }
+              retry_after: { type: integer }
+          example:
+            success: false
+            message: Demasiadas peticiones. Espera 40 segundos e intenta de nuevo.
+            retry_after: 40
     ServerErrorOrRateLimit:
       description: |
-        Error interno **o límite de peticiones superado** (el manejador actual convierte el `429` en
-        `500`, con `message: "Too Many Attempts."` y sin `Retry-After`). Los errores técnicos (SQL, PHP)
-        se devuelven sin `file`/`line`.
+        Error interno del servidor. Los errores técnicos (SQL, PHP) se devuelven sin `file`/`line`.
       content:
         application/json:
           schema:
@@ -1187,9 +1236,7 @@ components:
               - $ref: '#/components/schemas/Error'
           example:
             success: false
-            message: Too Many Attempts.
-            file: /var/www/html/vendor/laravel/framework/src/Illuminate/Routing/Middleware/ThrottleRequests.php
-            line: 200
+            message: Error interno del servidor.
 
   schemas:
     # ───────────── Errores ─────────────

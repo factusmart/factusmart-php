@@ -153,8 +153,6 @@ try {
 }
 ```
 
-> Hoy el API responde el límite de peticiones como **HTTP 500 "Too Many Attempts."** en vez de 429.
-> El SDK lo reconoce igual y lanza `LimiteDePeticiones`.
 
 ## Reintentos e idempotencia
 
@@ -162,7 +160,7 @@ try {
   (`['idempotencyKey' => ...]`, recomendado: el id de la venta en tu sistema) o un UUID v4 generado.
   **La misma clave se usa en todos los reintentos de esa llamada**, así un reintento nunca emite dos veces.
   Si vuelves a llamar con la misma clave, el API devuelve el mismo comprobante sin cobrar otra vez.
-- Se reintenta solo ante error de red/timeout, HTTP 429 (o el 500 "Too Many Attempts."), 502, 503 y 504,
+- Se reintenta solo ante error de red/timeout, HTTP 429, 502, 503 y 504,
   esperando 1 s, 2 s, 4 s… (o lo que diga `Retry-After` / "Espera N segundos"). En `emitir`, también el
   `409` ("emisión en curso con esa Idempotency-Key").
 - Se reintentan: todas las consultas (GET), `comprobantes->emitir()` y `rucs->crear()` (idempotente por RUC).
