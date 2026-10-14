@@ -15,6 +15,19 @@
   lanza `NoEncontrado` con el `message` y el `codigo` del API.
 - `ErrorDeValidacion::$errores` se llena también desde `campos`.
 - El User-Agent y `Cliente::VERSION` ahora dicen la versión real (`0.2.0`; antes decían `1.0.0`).
+- Nuevo `comprobantes->calcular($items, ['porcentaje_igv' => ...])` (`POST /calcular`): el servidor arma
+  `items` y `totales`; admite `precio_unitario` con IGV y la tasa 10.5 % (Ley 31556). No manda `ruc`.
+  Se reintenta como un GET. `Cliente::calcularComprobante()` (local, sin red) se mantiene.
+- Nuevo recurso `catalogos`: `listar()` (`GET /catalogos`) y `consultar($nombre, ['q' => ..., 'ruc' => ...])`
+  (`GET /catalogos/{nombre}`).
+- Reintentos: un error cuyo cuerpo diga `reintentable: false` no se reintenta nunca, aunque sea 429/409/5xx.
+  El `429 LIMITE_PRUEBAS_DIARIO` (tope diario de RUCs demo) lanza `LimiteDePeticiones` tras una sola
+  petición, con `codigo` `LIMITE_PRUEBAS_DIARIO` y `reintentable` false.
+- Anulaciones: también boletas (resumen diario). La respuesta trae `tipo` (`baja` | `resumen`) e
+  `identificador`; mezclar facturas y boletas → `ErrorDeValidacion` con `codigo` `ANULACION_MIXTA`.
+- `FactuSmart\Codigos`: nuevas constantes `LIMITE_PRUEBAS_DIARIO`, `ANULACION_MIXTA` y
+  `LLAVE_DE_PRUEBA_EN_PRODUCCION`.
+- RUCs demo: no cobran crédito (`credito_cobrado: false`). La prueba de idempotencia ya no mira el saldo.
 
 ## 0.1.0 — 2026-10-14
 

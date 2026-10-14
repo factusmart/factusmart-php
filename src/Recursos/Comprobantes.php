@@ -60,6 +60,27 @@ final class Comprobantes extends Recurso
     }
 
     /**
+     * POST /calcular — el SERVIDOR arma `items` y `totales` listos para emitir(). No emite ni cobra
+     * crédito y no usa RUC (no se manda). Admite `precio_unitario` CON IGV (3 × S/ 10.00 = S/ 30.00)
+     * y la tasa reducida 10.5 % (Ley 31556). Sin efectos: se reintenta como un GET.
+     *
+     * Errores de validación en $e->campos con clave `items.N.campo`.
+     *
+     * @param array<int, array<string, mixed>> $items    descripcion, cantidad, valor_unitario o precio_unitario, afectacion...
+     * @param array<string, mixed>             $opciones porcentaje_igv (18 o 10.5)
+     * @return array<string, mixed> success, items, totales (tal cual los devuelve el API)
+     */
+    public function calcular(array $items, array $opciones = []): array
+    {
+        $cuerpo = ['items' => array_values($items)];
+        if (isset($opciones['porcentaje_igv']) && $opciones['porcentaje_igv'] !== '') {
+            $cuerpo['porcentaje_igv'] = $opciones['porcentaje_igv'];
+        }
+        /** @var array<string, mixed> */
+        return $this->http->peticion('POST', '/calcular', [], $cuerpo, reintentable: true);
+    }
+
+    /**
      * GET /documents — lista del más reciente al más antiguo.
      * @param array<string, mixed> $filtros  estado, desde, hasta, limite, antes_de
      * @param array<string, mixed> $opciones ruc

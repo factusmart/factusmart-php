@@ -21,7 +21,8 @@ final class ClienteHttp
 
     /**
      * Estados HTTP que se reintentan (si la operación es reintentable). Además se
-     * reintenta cualquier error cuyo cuerpo diga `reintentable: true`.
+     * reintenta cualquier error cuyo cuerpo diga `reintentable: true`, y NUNCA uno que diga
+     * `reintentable: false` (aunque su HTTP esté en esta lista).
      */
     private const ESTADOS_REINTENTABLES = [429, 502, 503, 504];
 
@@ -46,7 +47,7 @@ final class ClienteHttp
      * @param array<string, mixed>      $query
      * @param array<string, mixed>|null $cuerpo
      * @param array<string, string>     $cabecerasExtra
-     * @param bool $reintentable  si se puede repetir sin riesgo de duplicar (GET, emitir con Idempotency-Key, crear RUC)
+     * @param bool $reintentable  si se puede repetir sin riesgo de duplicar (GET, calcular, emitir con Idempotency-Key, crear RUC)
      * @param bool $reintentar409 solo emitir: 409 = "emisión en curso con esa Idempotency-Key"
      * @param bool $binario       devolver los bytes del cuerpo en vez de decodificar JSON
      * @return array<mixed>|string
@@ -109,7 +110,13 @@ final class ClienteHttp
                 $esperaSugerida = $error->segundosDeEspera;
             }
 
-            $puedeReintentar = $reintentable && (
+            // `reintentable: false` explícito en el cuerpo MANDA: no se repite aunque el HTTP sea
+            // 429/409/5xx (p.ej. 429 LIMITE_PRUEBAS_DIARIO). Sin la clave → regla por HTTP.
+            $noReintentar = is_array($error->respuesta)
+                && array_key_exists('reintentable', $error->respuesta)
+                && $error->respuesta['reintentable'] === false;
+
+            $puedeReintentar = $reintentable && !$noReintentar && (
                 in_array($respuesta->status, self::ESTADOS_REINTENTABLES, true)
                 || $error instanceof LimiteDePeticiones
                 || ($reintentar409 && $respuesta->status === 409)
@@ -163,8 +170,10 @@ final class ClienteHttp
             || (is_array($datos) && ($datos['codigo'] ?? null) === 'LIMITE_PETICIONES')
             || stripos($mensaje, 'Too Many Attempts') !== false;
         if ($esLimite) {
+            // LIMITE_PRUEBAS_DIARIO (tope diario en RUCs demo) ya trae su propio mensaje claro.
+            $esTopeDiario = is_array($datos) && ($datos['codigo'] ?? null) === 'LIMITE_PRUEBAS_DIARIO';
             return new LimiteDePeticiones(
-                'Límite de peticiones superado. ' . $mensaje,
+                ($esTopeDiario ? '' : 'Límite de peticiones superado. ') . $mensaje,
                 $status,
                 $cuerpo,
                 $this->segundosDeEspera($respuesta, $mensaje)

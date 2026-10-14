@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FactuSmart\Pruebas\Unidad;
 
 use FactuSmart\Cliente;
+use FactuSmart\Codigos;
 use FactuSmart\Excepciones\ErrorDeAutenticacion;
 use FactuSmart\Excepciones\ErrorDeValidacion;
 use FactuSmart\Excepciones\FactuSmartError;
@@ -149,6 +150,129 @@ final class ReintentosYErroresTest extends TestCase
         } catch (LimiteDePeticiones $e) {
             $this->assertSame(3, $e->segundosDeEspera);
         }
+    }
+
+    public function testLimitePruebasDiarioNoSeReintentaUnaSolaPeticion(): void
+    {
+        $cuerpo = [
+            'success' => false,
+            'message' => 'Llegaste al máximo de 200 pruebas por día en modo demo. Mañana se reinicia (medianoche, hora de Perú).',
+            'codigo' => 'LIMITE_PRUEBAS_DIARIO',
+            'reintentable' => false,
+        ];
+        // Aunque sea 429 y una operación reintentable (GET y emitir), reintentable:false manda.
+        $operaciones = [
+            'GET' => fn (Cliente $c) => $c->cuenta->saldo(),
+            'emitir' => fn (Cliente $c) => $c->comprobantes->emitir(['codigo_tipo_documento' => '03']),
+            'calcular' => fn (Cliente $c) => $c->comprobantes->calcular([['descripcion' => 'A', 'cantidad' => 1, 'valor_unitario' => 1, 'afectacion' => '10']]),
+        ];
+        foreach ($operaciones as $nombre => $op) {
+            $t = new TransporteFalso([
+                TransporteFalso::json(429, $cuerpo, ['retry-after' => '60']),
+                TransporteFalso::json(200, ['success' => true]),
+            ]);
+            try {
+                $op($this->cliente($t));
+                $this->fail("{$nombre}: debió lanzar LimiteDePeticiones");
+            } catch (LimiteDePeticiones $e) {
+                $this->assertSame(LimiteDePeticiones::class, $e::class, 'No hay subclase nueva');
+                $this->assertSame(429, $e->status);
+                $this->assertSame(Codigos::LIMITE_PRUEBAS_DIARIO, $e->codigo);
+                $this->assertFalse($e->reintentable);
+                $this->assertStringStartsWith('Llegaste al máximo', $e->mensaje);
+            }
+            $this->assertCount(1, $t->peticiones, "{$nombre}: exactamente 1 petición");
+            $this->assertSame([], $this->esperas, "{$nombre}: no debió esperar");
+        }
+    }
+
+    public function testReintentableFalseMandaTambienEn503Y409(): void
+    {
+        $t = new TransporteFalso([
+            TransporteFalso::json(503, ['success' => false, 'message' => 'No', 'codigo' => 'X', 'reintentable' => false]),
+            TransporteFalso::json(200, ['success' => true]),
+        ]);
+        try {
+            $this->cliente($t)->ping();
+            $this->fail('Debió lanzar');
+        } catch (FactuSmartError $e) {
+            $this->assertSame(503, $e->status);
+        }
+        $this->assertCount(1, $t->peticiones);
+
+        $t = new TransporteFalso([
+            TransporteFalso::json(409, ['success' => false, 'message' => 'Conflicto', 'codigo' => 'CONFLICTO', 'reintentable' => false]),
+            self::emisionOk(),
+        ]);
+        try {
+            $this->cliente($t)->comprobantes->emitir(['codigo_tipo_documento' => '03']);
+            $this->fail('Debió lanzar');
+        } catch (FactuSmartError $e) {
+            $this->assertSame('CONFLICTO', $e->codigo);
+        }
+        $this->assertCount(1, $t->peticiones);
+    }
+
+    public function testUn429ConReintentableTrueSiSeReintenta(): void
+    {
+        $t = new TransporteFalso([
+            TransporteFalso::json(429, ['success' => false, 'message' => 'Espera 2 segundos', 'codigo' => 'LIMITE_PETICIONES', 'reintentable' => true]),
+            TransporteFalso::json(200, ['success' => true, 'creditos_disponibles' => 5]),
+        ]);
+        $r = $this->cliente($t)->cuenta->saldo();
+        $this->assertSame(5, $r['creditos_disponibles']);
+        $this->assertCount(2, $t->peticiones);
+        $this->assertSame([2.0], $this->esperas);
+    }
+
+    public function testCalcularMandaItemsYPorcentajeSinRucYSeReintentaComoUnGet(): void
+    {
+        $items = [['descripcion' => 'Menu', 'cantidad' => 3, 'precio_unitario' => 10, 'afectacion' => '10']];
+        $respuesta = ['success' => true, 'items' => [['total_item' => 30]], 'totales' => ['total_venta' => 30]];
+        $t = new TransporteFalso([
+            new ErrorDeRed('timeout'),
+            TransporteFalso::json(503, ['success' => false, 'message' => 'caído']),
+            TransporteFalso::json(200, $respuesta),
+            TransporteFalso::json(200, $respuesta),
+        ]);
+        $c = $this->cliente($t);
+
+        $r = $c->comprobantes->calcular($items, ['porcentaje_igv' => 10.5, 'ruc' => '20111111111']);
+        $this->assertSame($respuesta, $r, 'Devuelve la respuesta tal cual');
+        $this->assertCount(3, $t->peticiones);
+        $p = $t->peticiones[2];
+        $this->assertSame('POST', $p['metodo']);
+        $this->assertSame('https://ejemplo.test/api/v1/issuer/calcular', $p['url']);
+        $this->assertArrayNotHasKey('Idempotency-Key', $p['cabeceras']);
+        $this->assertSame(['items' => $items, 'porcentaje_igv' => 10.5], json_decode((string) $p['cuerpo'], true));
+
+        $c->comprobantes->calcular($items);
+        $cuerpo = json_decode((string) $t->peticiones[3]['cuerpo'], true);
+        $this->assertSame(['items' => $items], $cuerpo, 'Sin porcentaje_igv ni ruc en el cuerpo');
+    }
+
+    public function testCatalogosListarYConsultar(): void
+    {
+        $t = new TransporteFalso([
+            TransporteFalso::json(200, ['success' => true, 'catalogos' => [], 'nota' => '']),
+            TransporteFalso::json(200, ['success' => true, 'catalogo' => 'unidades', 'total' => 0, 'datos' => []]),
+            TransporteFalso::json(200, ['success' => true]),
+            TransporteFalso::json(200, ['success' => true]),
+        ]);
+        $c = $this->cliente($t);
+        $c->catalogos->listar();
+        $this->assertSame('GET', $t->peticiones[0]['metodo']);
+        $this->assertSame('https://ejemplo.test/api/v1/issuer/catalogos?ruc=20123456789', $t->peticiones[0]['url']);
+
+        $r = $c->catalogos->consultar('unidades', ['q' => 'kilo gr']);
+        $this->assertSame('unidades', $r['catalogo']);
+        $this->assertSame('https://ejemplo.test/api/v1/issuer/catalogos/unidades?q=kilo%20gr&ruc=20123456789', $t->peticiones[1]['url']);
+
+        $c->catalogos->consultar('03', ['ruc' => '20111111111']);
+        $this->assertSame('https://ejemplo.test/api/v1/issuer/catalogos/03?ruc=20111111111', $t->peticiones[2]['url']);
+
+        $c->catalogos->consultar('a/b');
+        $this->assertSame('https://ejemplo.test/api/v1/issuer/catalogos/a%2Fb?ruc=20123456789', $t->peticiones[3]['url']);
     }
 
     public function testValidacionLaravelSeVuelveMensajeLegible(): void

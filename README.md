@@ -1,7 +1,7 @@
 # FactuSmart SDK para PHP
 
 SDK oficial del **API de facturación electrónica de FactuSmart** (SUNAT, Perú): facturas, boletas,
-notas de crédito/débito, guías de remisión GRE 2.0 y comunicaciones de baja.
+notas de crédito/débito, guías de remisión GRE 2.0 y anulaciones (facturas y boletas).
 
 - PHP **8.1 o superior**, solo `ext-curl` y `ext-json`. **Cero dependencias.**
 - Mismos nombres y comportamiento que los SDK de Node y Python.
@@ -85,13 +85,16 @@ Todos devuelven un `array` con la respuesta JSON del API, salvo `descargar()` qu
 | `$fs->comprobantes->reenviar($externalId, $opciones)` | `POST /documents/{id}/reenviar` | gratis; no se reintenta solo |
 | `$fs->comprobantes->consultarSunat($externalId, $opciones)` | `POST /documents/{id}/consultar-sunat` | consulta en vivo; no se reintenta solo |
 | `$fs->comprobantes->historial($externalId, $opciones)` | `GET /documents/{id}/historial` | línea de tiempo |
-| `$fs->anulaciones->crear($datos, $opciones)` | `POST /anulaciones` | 1 crédito; **nunca** se reintenta solo |
-| `$fs->anulaciones->estado($ticket, $opciones)` | `GET /anulaciones/{ticket}/status` | |
+| `$fs->comprobantes->calcular($items, $opciones)` | `POST /calcular` | **nuevo**; el servidor arma `items` y `totales`; gratis, no emite; `$opciones`: `porcentaje_igv` (18 o 10.5) |
+| `$fs->anulaciones->crear($datos, $opciones)` | `POST /anulaciones` | facturas y boletas; 1 crédito; **nunca** se reintenta solo |
+| `$fs->anulaciones->estado($ticket, $opciones)` | `GET /anulaciones/{ticket}/status` | trae `tipo` y `documentos[]` |
 | `$fs->guias->emitir($datos, $opciones)` | `POST /guias` | revisa `enviado`; **nunca** se reintenta solo |
 | `$fs->guias->estado($externalId, $opciones)` | `GET /guias/{id}/status` | |
 | `$fs->rucs->listar()` | `GET /rucs` | |
 | `$fs->rucs->crear($datos)` | `POST /rucs` | idempotente por RUC (`ya_existia`) |
 | `$fs->rucs->activar($ruc, $activo)` | `PATCH /rucs/{ruc}/activation` | `true` activa, `false` desactiva |
+| `$fs->catalogos->listar($opciones)` | `GET /catalogos` | **nuevo**; catálogos SUNAT disponibles (`catalogos`) |
+| `$fs->catalogos->consultar($nombre, $opciones)` | `GET /catalogos/{nombre}` | **nuevo**; `$nombre` = `unidades` o número SUNAT (`07`); `$opciones`: `q`, `ruc`. Usa solo filas con `activo: true` |
 
 ### Lo que `comprobantes->emitir()` completa por ti
 
@@ -106,6 +109,27 @@ Solo si **no** lo mandas tú:
 `guias->emitir()` completa igual `ruc`, `numero_documento` y la fecha/hora de Perú.
 
 ## Calcular IGV y totales
+
+### ¿Calcular en el servidor o local?
+
+| | `$fs->comprobantes->calcular()` (servidor) | `Cliente::calcularComprobante()` (local) |
+|---|---|---|
+| Petición | sí (`POST /calcular`, gratis, no emite) | **ninguna** |
+| Precio | `valor_unitario` (sin IGV) **o** `precio_unitario` (con IGV: 3 × S/ 10.00 = S/ 30.00) | solo `valor_unitario` sin IGV |
+| Tasa IGV | 18 % o **10.5 %** (Ley 31556, `porcentaje_igv`) | solo 18 % |
+| Lógica en tu lado | cero: el cálculo lo hace siempre FactuSmart | la del SDK (mismos números que el servidor en sus casos) |
+
+Usa el del servidor si tienes precios con IGV, la tasa 10.5 % o quieres que el cálculo lo haga siempre
+FactuSmart. Usa el local si quieres cero peticiones extra.
+
+```php
+$c = $fs->comprobantes->calcular([
+    ['descripcion' => 'Menú', 'cantidad' => 3, 'precio_unitario' => 10, 'afectacion' => '10'],
+], ['porcentaje_igv' => 10.5]);
+// $c['items'] y $c['totales'] listos para emitir(). Errores en $e->campos con clave items.N.campo.
+```
+
+### Local, sin petición
 
 ```php
 $r = FactuSmart\Cliente::calcularComprobante([
@@ -174,6 +198,9 @@ Códigos más comunes:
 | `EMISION_EN_CURSO` | otra petición con la misma `Idempotency-Key` sigue en curso |
 | `SUNAT_NO_DISPONIBLE` | SUNAT no responde; reintentable |
 | `LIMITE_PETICIONES` | espera `$e->segundosDeEspera` |
+| `LIMITE_PRUEBAS_DIARIO` | RUC demo: llegaste al tope de 200 operaciones/día de la cuenta (429, **no reintentable**; se reinicia a medianoche de Lima) |
+| `ANULACION_MIXTA` | mezclaste facturas y boletas en una anulación (422) |
+| `LLAVE_DE_PRUEBA_EN_PRODUCCION` | usaste una llave de prueba contra un RUC en producción (403) |
 | `ERROR_INTERNO` | error del servidor; reintentable |
 
 Lista completa en `FactuSmart\Codigos` (también `SIN_PERMISO`, `RUTA_NO_ENCONTRADA`, `METODO_NO_PERMITIDO`,
@@ -203,6 +230,27 @@ http_response_code(200);
 
 Nunca lanza excepción: firma o secreto vacíos, o una firma que no sea de 64 caracteres hex, devuelven `false`.
 
+## Anulaciones (facturas y boletas)
+
+`$fs->anulaciones->crear()` anula **facturas** (comunicación de baja) y **boletas** (resumen diario; solo
+boletas aceptadas, estado `05`). El método es el mismo: el API elige el camino y lo dice en la respuesta.
+
+```php
+$r = $fs->anulaciones->crear([
+    'fecha_de_emision_de_documentos' => '14-10-2026',   // DD-MM-AAAA, la de emisión de los comprobantes
+    'documentos' => [['external_id' => $externalId, 'motivo_anulacion' => 'Error en el comprobante']],
+]);
+// $r['tipo']          'baja' (facturas) | 'resumen' (boletas)
+// $r['identificador'] 'RA-20261014-1'   | 'RC-20261014-1'
+// $r['ticket']        para $fs->anulaciones->estado($r['ticket'])
+```
+
+- No mezcles facturas y boletas en la misma petición: lanza `ErrorDeValidacion` con `codigo`
+  `ANULACION_MIXTA`. Haz una petición por tipo.
+- La respuesta trae también `external_id`, `creditos_restantes`, `credito_cobrado` y, en RUCs demo,
+  `modo_demo` y `pruebas_restantes_hoy`.
+- Nunca se reintenta sola (no admite `Idempotency-Key`).
+
 
 ## Reintentos e idempotencia
 
@@ -214,17 +262,29 @@ Nunca lanza excepción: firma o secreto vacíos, o una firma que no sea de 64 ca
   esperando 1 s, 2 s, 4 s… (o lo que diga `Retry-After` / "Espera N segundos"). En `emitir`, también el
   `409` ("emisión en curso con esa Idempotency-Key"). Y cualquier error cuyo cuerpo diga
   `reintentable: true` (p.ej. `ERROR_INTERNO`, `SUNAT_NO_DISPONIBLE`), solo en las operaciones de abajo.
-- Se reintentan: todas las consultas (GET), `comprobantes->emitir()` y `rucs->crear()` (idempotente por RUC).
+- **`reintentable: false` manda:** si el cuerpo del error lo dice, no se reintenta nunca, aunque sea 429,
+  409 o 5xx. Caso real: `429` con `codigo` `LIMITE_PRUEBAS_DIARIO` (tope diario de los RUCs demo) lanza
+  `LimiteDePeticiones` tras **una sola** petición, con `$e->codigo === Codigos::LIMITE_PRUEBAS_DIARIO` y
+  `$e->reintentable === false`. Decide por `$e->codigo`, no por la clase. Si el servidor no manda
+  `reintentable`, se usa la regla por HTTP.
+- Se reintentan: todas las consultas (GET), `comprobantes->calcular()` (no tiene efectos),
+  `comprobantes->emitir()` y `rucs->crear()` (idempotente por RUC).
 - **Nunca** se reintentan solos: `anulaciones->crear()`, `guias->emitir()`, `comprobantes->reenviar()`,
   `comprobantes->consultarSunat()`, `rucs->activar()`.
 - `maxReintentos => 0` desactiva los reintentos.
+
+## RUCs demo (modo prueba)
+
+En un RUC demo **no se cobra crédito**: las respuestas traen `credito_cobrado: false`, `modo_demo: true` y
+`pruebas_restantes_hoy`. El saldo no baja. A cambio hay un tope de **200 operaciones/día por cuenta**
+(`429 LIMITE_PRUEBAS_DIARIO`, no reintentable). Cada RUC nace en modo prueba (SUNAT beta, sin validez fiscal).
 
 ## Pruebas
 
 ```bash
 composer install
 vendor/bin/phpunit --testsuite unidad        # sin red
-vendor/bin/phpunit --testsuite integracion   # contra un API LOCAL (gasta 2 créditos)
+vendor/bin/phpunit --testsuite integracion   # contra un API LOCAL (emite 3 boletas demo)
 php scripts/caso_comun.php                   # regenera resultado_caso_comun.json
 ```
 

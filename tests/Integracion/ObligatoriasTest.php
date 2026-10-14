@@ -14,7 +14,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Las 9 pruebas obligatorias de DISENO_SDK.md, contra el API LOCAL (Laragon).
- * Gasta 2 créditos por corrida (P3 y P5). Nunca apuntar a producción.
+ * Emite 3 comprobantes por corrida (P3, P5 y P5b); en RUCs demo no cobran crédito pero cuentan
+ * para el tope de 200 operaciones/día por cuenta. Nunca apuntar a producción.
  *
  * Variables: FACTUSMART_BASE_URL, FACTUSMART_API_KEY, FACTUSMART_RUC, FACTUSMART_VERIFICAR_SSL (ver phpunit.xml).
  */
@@ -105,20 +106,71 @@ final class ObligatoriasTest extends TestCase
         self::log('[P4] PDF de ' . strlen($pdf) . ' bytes, historial con ' . count($h['historial']) . ' eventos');
     }
 
-    public function testP5IdempotenciaMismaClaveMismoComprobanteYUnSoloCredito(): void
+    public function testP5IdempotenciaMismaClaveMismoComprobanteSinCobrarDosVeces(): void
     {
         $fs = self::cliente();
         $clave = 'sdk-php-' . bin2hex(random_bytes(8));
 
-        $antes = $fs->cuenta->saldo()['creditos_disponibles'];
         $r1 = $fs->comprobantes->emitir(self::boleta(), ['idempotencyKey' => $clave]);
         $r2 = $fs->comprobantes->emitir(self::boleta(), ['idempotencyKey' => $clave]);
-        $despues = $fs->cuenta->saldo()['creditos_disponibles'];
 
         $this->assertSame($r1['external_id'], $r2['external_id']);
         $this->assertSame($r1['serie_numero'], $r2['serie_numero']);
-        $this->assertSame(1, $antes - $despues, "El saldo debió bajar 1 (antes {$antes}, después {$despues})");
-        self::log("[P5] {$r1['serie_numero']} pedido dos veces con la misma clave, saldo {$antes} -> {$despues}");
+        // En RUCs demo no se cobra crédito: el saldo no baja, así que no se mira el saldo.
+        if (array_key_exists('credito_cobrado', $r2)) {
+            $this->assertFalse($r2['credito_cobrado'], 'La segunda llamada con la misma clave no debe cobrar');
+        }
+        self::log(sprintf(
+            '[P5] %s pedido dos veces con la misma clave; credito_cobrado %s -> %s',
+            $r1['serie_numero'],
+            var_export($r1['credito_cobrado'] ?? null, true),
+            var_export($r2['credito_cobrado'] ?? null, true)
+        ));
+    }
+
+    /** @return array<string, mixed> */
+    public function testP5bCalcularEnElServidorDaElCasoComun(): array
+    {
+        $r = self::cliente()->comprobantes->calcular(require __DIR__ . '/../fixtures/caso_comun_entrada.php');
+        $this->assertTrue($r['success']);
+        $esperado = json_decode((string) file_get_contents(__DIR__ . '/../../resultado_caso_comun.json'), true);
+        // Comparación numérica (el JSON puede traer 10 o 10.0): assertEquals, no assertSame.
+        $this->assertEquals($esperado['items'], $r['items']);
+        $this->assertEquals($esperado['totales'], $r['totales']);
+        self::log("[P5b] /calcular = resultado_caso_comun.json (total_venta {$r['totales']['total_venta']})");
+
+        return self::cliente()->comprobantes->calcular([
+            ['codigo_interno' => 'SDK-PHP-002', 'descripcion' => 'Menu SDK PHP (precio con IGV)', 'cantidad' => 3, 'precio_unitario' => 10, 'afectacion' => '10'],
+        ]);
+    }
+
+    /** @param array<string, mixed> $calculo */
+    #[Depends('testP5bCalcularEnElServidorDaElCasoComun')]
+    public function testP5bEmitirBoletaConLoQueDevuelveCalcular(array $calculo): void
+    {
+        $this->assertEquals(30, $calculo['totales']['total_venta'], '3 × S/ 10.00 con IGV = S/ 30.00');
+        $datos = self::boleta();
+        $datos['items'] = $calculo['items'];
+        $datos['totales'] = $calculo['totales'];
+
+        $r = self::cliente()->comprobantes->emitir($datos);
+        $this->assertTrue($r['success']);
+        $this->assertTrue($r['aceptado_por_sunat'], 'SUNAT beta no aceptó: ' . json_encode($r['sunat'] ?? null, JSON_UNESCAPED_UNICODE));
+        self::log("[P5b] emitida {$r['serie_numero']} con items/totales de /calcular (total 30.00)");
+    }
+
+    public function testP5cCatalogosListarYConsultar07(): void
+    {
+        $fs = self::cliente();
+        $l = $fs->catalogos->listar();
+        $this->assertTrue($l['success']);
+        $this->assertNotEmpty($l['catalogos']);
+
+        $c = $fs->catalogos->consultar('07');
+        $this->assertTrue($c['success']);
+        $codigos = array_column($c['datos'], 'codigo');
+        $this->assertContains('10', $codigos, 'El catálogo 07 debe traer la fila codigo 10');
+        self::log('[P5c] ' . count($l['catalogos']) . " catálogos; 07 = {$c['catalogo']} con {$c['total']} filas");
     }
 
     public function testP6ApiKeyFalsaLanzaErrorDeAutenticacion(): void

@@ -33,6 +33,12 @@ final class Codigos
     public const REENVIO_FALLIDO = 'REENVIO_FALLIDO';
     public const SUNAT_NO_DISPONIBLE = 'SUNAT_NO_DISPONIBLE';
     public const LIMITE_PETICIONES = 'LIMITE_PETICIONES';
+    /** 429 en RUCs demo: tope de 200 operaciones/día por cuenta. No reintentable (se reinicia a medianoche de Lima). */
+    public const LIMITE_PRUEBAS_DIARIO = 'LIMITE_PRUEBAS_DIARIO';
+    /** 422: facturas y boletas mezcladas en la misma anulación (haz una petición por tipo). */
+    public const ANULACION_MIXTA = 'ANULACION_MIXTA';
+    /** 403: llave de prueba usada contra un RUC en producción. */
+    public const LLAVE_DE_PRUEBA_EN_PRODUCCION = 'LLAVE_DE_PRUEBA_EN_PRODUCCION';
     public const ERROR_INTERNO = 'ERROR_INTERNO';
 
     private function __construct()

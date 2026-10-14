@@ -49,6 +49,20 @@ final class ContratoTest extends TestCase
         }
     }
 
+    public function testHerramientasCalcularYCatalogosEstanMapeadas(): void
+    {
+        $ids = self::operationIds();
+        $esperado = [
+            'calculateDocument' => ['comprobantes', 'calcular'],
+            'listCatalogs' => ['catalogos', 'listar'],
+            'getCatalog' => ['catalogos', 'consultar'],
+        ];
+        foreach ($esperado as $id => $destino) {
+            $this->assertContains($id, $ids, "{$id} no está en " . self::rutaYaml());
+            $this->assertSame($destino, Cliente::OPERACIONES[$id]);
+        }
+    }
+
     public function testElSdkNoDeclaraOperacionesQueElApiYaNoTiene(): void
     {
         $sobran = array_values(array_diff(array_keys(Cliente::OPERACIONES), self::operationIds()));

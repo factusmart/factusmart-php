@@ -9,6 +9,7 @@ use FactuSmart\Http\ClienteHttp;
 use FactuSmart\Http\Transporte;
 use FactuSmart\Http\TransporteCurl;
 use FactuSmart\Recursos\Anulaciones;
+use FactuSmart\Recursos\Catalogos;
 use FactuSmart\Recursos\Comprobantes;
 use FactuSmart\Recursos\Cuenta;
 use FactuSmart\Recursos\Guias;
@@ -51,6 +52,9 @@ final class Cliente
         'listRucs' => ['rucs', 'listar'],
         'createRuc' => ['rucs', 'crear'],
         'setRucActivation' => ['rucs', 'activar'],
+        'calculateDocument' => ['comprobantes', 'calcular'],
+        'listCatalogs' => ['catalogos', 'listar'],
+        'getCatalog' => ['catalogos', 'consultar'],
         // Webhook (lo envía el API a tu servidor): el SDK aporta la verificación de la firma.
         'webhookComprobanteEstado' => [null, 'verificarFirmaWebhook'],
     ];
@@ -65,6 +69,7 @@ final class Cliente
     public readonly Anulaciones $anulaciones;
     public readonly Guias $guias;
     public readonly Rucs $rucs;
+    public readonly Catalogos $catalogos;
 
     private readonly ClienteHttp $http;
     private readonly ?string $ruc;
@@ -113,6 +118,7 @@ final class Cliente
         $this->anulaciones = new Anulaciones($this->http, $this->ruc);
         $this->guias = new Guias($this->http, $this->ruc);
         $this->rucs = new Rucs($this->http, null);
+        $this->catalogos = new Catalogos($this->http, $this->ruc);
     }
 
     /**
@@ -150,12 +156,15 @@ final class Cliente
     }
 
     /**
-     * Calcula IGV y totales. Recibe ítems con:
+     * Calcula IGV y totales SIN hacer petición (local). Recibe ítems con:
      *   descripcion, cantidad, valor_unitario (SIN IGV), afectacion ('10' gravado 18%,
      *   '20' exonerado, '30' inafecto, '40' exportación) y opcional codigo_interno, unidad_de_medida (NIU).
      *
      * Devuelve ['items' => [...], 'totales' => [...]] listos para comprobantes->emitir().
      * Redondeo a 2 decimales por ítem (mitad hacia arriba), igual que la doc pública.
+     *
+     * Solo valor_unitario SIN IGV y tasa 18 %. Para precios CON IGV o la tasa 10.5 % (Ley 31556)
+     * usa $fs->comprobantes->calcular() (lo calcula el servidor).
      *
      * @param array<int, array<string, mixed>> $items
      * @return array{items: array<int, array<string, mixed>>, totales: array<string, float>}
