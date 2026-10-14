@@ -1,0 +1,8 @@
+# Lo que no viaja al instalar con Composer
+/tests export-ignore
+/scripts export-ignore
+/ejemplos export-ignore
+/phpunit.xml export-ignore
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/resultado_caso_comun.json export-ignore

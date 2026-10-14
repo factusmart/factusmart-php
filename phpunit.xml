@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="false"
+         testdox="true"
+         failOnRisky="true"
+         failOnWarning="true">
+    <testsuites>
+        <testsuite name="unidad">
+            <directory>tests/Unidad</directory>
+        </testsuite>
+        <testsuite name="integracion">
+            <directory>tests/Integracion</directory>
+        </testsuite>
+    </testsuites>
+    <php>
+        <!-- Solo para pruebas contra el API LOCAL (Laragon). Nunca producción. -->
+        <env name="FACTUSMART_BASE_URL" value="https://factusmart.test/api/v1/issuer" force="false"/>
+        <env name="FACTUSMART_API_KEY" value="test_apikey_demo_123" force="false"/>
+        <env name="FACTUSMART_RUC" value="20777666555" force="false"/>
+        <env name="FACTUSMART_VERIFICAR_SSL" value="0" force="false"/>
+        <env name="FACTUSMART_OPENAPI" value="C:/laragon/www/factusmart/docs/api/openapi.yaml" force="false"/>
+    </php>
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+</phpunit>

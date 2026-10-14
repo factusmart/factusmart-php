@@ -1,0 +1,42 @@
+{
+    "name": "factusmart/sdk",
+    "description": "SDK oficial en PHP del API de facturación electrónica de FactuSmart (SUNAT, Perú): facturas, boletas, notas, guías y anulaciones.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["factusmart", "sunat", "facturacion electronica", "peru", "cpe", "boleta", "factura", "ubl"],
+    "homepage": "https://factusmart.pe/api-facturacion-electronica/docs",
+    "authors": [
+        {
+            "name": "FactuSmart",
+            "homepage": "https://factusmart.pe"
+        }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "ext-curl": "*",
+        "ext-json": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "FactuSmart\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "FactuSmart\\Pruebas\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test:unidad": "phpunit --testsuite unidad",
+        "test:integracion": "phpunit --testsuite integracion",
+        "caso-comun": "php scripts/caso_comun.php"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable"
+}
