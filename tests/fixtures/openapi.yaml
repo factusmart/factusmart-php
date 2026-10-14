@@ -689,6 +689,10 @@ paths:
       description: |
         Pregunta a SUNAT en vivo por el comprobante (consulta de CDR), sincroniza el estado y lo devuelve.
         Útil cuando el envío quedó en el aire. No consume crédito.
+
+        **Solo funciona con RUC en producción.** SUNAT no ofrece este servicio de consulta en su
+        entorno de pruebas (beta): con un RUC en modo prueba la respuesta es `422` con
+        "No se pudo consultar a SUNAT: ... Unauthorized". En pruebas usa `POST /documents/{external_id}/reenviar`.
       parameters:
         - $ref: '#/components/parameters/ExternalId'
         - $ref: '#/components/parameters/XRucHeader'
@@ -1362,6 +1366,7 @@ components:
         plan:
           plan: Pro
           plan_activo: true
+          plan_vencido: false
           periodo: mensual
           plan_vence: "2026-10-31"
           cupo_mensual: 1000
@@ -1378,6 +1383,7 @@ components:
       properties:
         plan: { type: [string, "null"], description: 'Nombre del plan de suscripción, o null.' }
         plan_activo: { type: boolean }
+        plan_vencido: { type: boolean, description: 'true si la cuenta tuvo plan y ya venció (no se renovó).' }
         periodo: { type: [string, "null"], enum: [mensual, anual, null] }
         plan_vence: { type: [string, "null"], format: date }
         cupo_mensual: { type: integer }
@@ -2094,7 +2100,7 @@ components:
               entorno:
                 type: [string, "null"]
                 enum: [demo, produccion, null]
-                description: '`demo` = modo prueba. null si el RUC no tiene tenant.'
+                description: '`demo` = modo prueba (equivale a `entorno: prueba` en los comprobantes). null si el RUC no tiene tenant.'
               activo: { type: boolean }
               creado: { type: [string, "null"], description: 'YYYY-MM-DD HH:MM' }
       example:
