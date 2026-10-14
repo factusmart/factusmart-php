@@ -40,6 +40,12 @@ final class Codigos
     /** 403: llave de prueba usada contra un RUC en producción. */
     public const LLAVE_DE_PRUEBA_EN_PRODUCCION = 'LLAVE_DE_PRUEBA_EN_PRODUCCION';
     public const ERROR_INTERNO = 'ERROR_INTERNO';
+    /** 500 (reintentable): el PDF en el `formato` pedido no se pudo generar. Reintenta en unos segundos. */
+    public const PDF_NO_GENERADO = 'PDF_NO_GENERADO';
+    /** 403: el plan del RUC no permite más locales (POST /establecimientos). */
+    public const LIMITE_ESTABLECIMIENTOS = 'LIMITE_ESTABLECIMIENTOS';
+    /** El catálogo SUNAT pedido no está disponible. */
+    public const CATALOGO_NO_DISPONIBLE = 'CATALOGO_NO_DISPONIBLE';
 
     private function __construct()
     {

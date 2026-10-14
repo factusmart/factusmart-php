@@ -12,6 +12,7 @@ use FactuSmart\Recursos\Anulaciones;
 use FactuSmart\Recursos\Catalogos;
 use FactuSmart\Recursos\Comprobantes;
 use FactuSmart\Recursos\Cuenta;
+use FactuSmart\Recursos\Establecimientos;
 use FactuSmart\Recursos\Guias;
 use FactuSmart\Recursos\Rucs;
 use FactuSmart\Recursos\Series;
@@ -55,6 +56,9 @@ final class Cliente
         'calculateDocument' => ['comprobantes', 'calcular'],
         'listCatalogs' => ['catalogos', 'listar'],
         'getCatalog' => ['catalogos', 'consultar'],
+        'searchSunatProductCodes' => ['catalogos', 'buscarProductoSunat'],
+        'listEstablishments' => ['establecimientos', 'listar'],
+        'createEstablishment' => ['establecimientos', 'crear'],
         // Webhook (lo envía el API a tu servidor): el SDK aporta la verificación de la firma.
         'webhookComprobanteEstado' => [null, 'verificarFirmaWebhook'],
     ];
@@ -70,6 +74,7 @@ final class Cliente
     public readonly Guias $guias;
     public readonly Rucs $rucs;
     public readonly Catalogos $catalogos;
+    public readonly Establecimientos $establecimientos;
 
     private readonly ClienteHttp $http;
     private readonly ?string $ruc;
@@ -119,6 +124,7 @@ final class Cliente
         $this->guias = new Guias($this->http, $this->ruc);
         $this->rucs = new Rucs($this->http, null);
         $this->catalogos = new Catalogos($this->http, $this->ruc);
+        $this->establecimientos = new Establecimientos($this->http, $this->ruc);
     }
 
     /**

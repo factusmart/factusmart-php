@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace FactuSmart\Recursos;
 
+use FactuSmart\Excepciones\ErrorDeValidacion;
 use FactuSmart\Excepciones\FactuSmartError;
 
 /** Facturas (01), boletas (03), notas de crédito (07) y débito (08). */
 final class Comprobantes extends Recurso
 {
     private const TIPOS_ARCHIVO = ['pdf', 'xml', 'cdr'];
+    /** Tamaños del PDF (`?formato=`). `ticket` = `ticket80`. Solo para pdf. */
+    public const FORMATOS_PDF = ['a4', 'a5', 'ticket', 'ticket80', 'ticket58', 'ticket50'];
 
     /**
      * POST /documents — emite el comprobante. Cuesta 1 crédito.
@@ -107,8 +110,14 @@ final class Comprobantes extends Recurso
 
     /**
      * GET /documents/{external_id}/{type} — devuelve los BYTES del archivo (string binario).
+     *
+     * PDF en ticket u otro tamaño: `descargar($id, 'pdf', ['formato' => 'ticket'])` →
+     * `?formato=ticket`. Valores: a4, a5, ticket (= ticket80), ticket80, ticket58, ticket50.
+     * Sin `formato` sale el A4 de siempre (no se manda el parámetro). `formato` con xml/cdr o un
+     * valor fuera de la lista lanza ErrorDeValidacion (422, DATOS_INVALIDOS) SIN hacer petición.
+     *
      * @param string $tipo pdf | xml | cdr
-     * @param array<string, mixed> $opciones ruc
+     * @param array<string, mixed> $opciones ruc, formato (solo pdf)
      */
     public function descargar(string $externalId, string $tipo, array $opciones = []): string
     {
@@ -116,13 +125,42 @@ final class Comprobantes extends Recurso
         if (!in_array($tipo, self::TIPOS_ARCHIVO, true)) {
             throw new FactuSmartError("Tipo de archivo inválido: '{$tipo}'. Usa pdf, xml o cdr.");
         }
+        $query = $this->queryRuc($opciones);
+        $formato = $opciones['formato'] ?? null;
+        if ($formato !== null && $formato !== '') {
+            $formato = strtolower(trim((string) $formato));
+            if ($tipo !== 'pdf') {
+                throw self::errorFormato("El formato solo aplica al PDF; '{$tipo}' no tiene tamaños.", 'El formato solo aplica al PDF.');
+            }
+            if (!in_array($formato, self::FORMATOS_PDF, true)) {
+                throw self::errorFormato(
+                    "Formato inválido: '{$formato}'. Usa " . implode(', ', self::FORMATOS_PDF) . '.',
+                    'El formato seleccionado es inválido.'
+                );
+            }
+            $query['formato'] = $formato;
+        }
         /** @var string */
         return $this->http->peticion(
             'GET',
             '/documents/' . self::segmento($externalId, 'externalId') . '/' . $tipo,
-            $this->queryRuc($opciones),
+            $query,
             binario: true
         );
+    }
+
+    /** Error local (sin petición) con la misma forma que el 422 DATOS_INVALIDOS del API. */
+    private static function errorFormato(string $mensaje, string $detalle): ErrorDeValidacion
+    {
+        $campos = ['formato' => [$detalle]];
+        return new ErrorDeValidacion($mensaje, 422, [
+            'success' => false,
+            'message' => $mensaje,
+            'codigo' => 'DATOS_INVALIDOS',
+            'reintentable' => false,
+            'campos' => $campos,
+            'formatos_validos' => self::FORMATOS_PDF,
+        ], $campos);
     }
 
     /**

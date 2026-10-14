@@ -28,6 +28,15 @@
 - `FactuSmart\Codigos`: nuevas constantes `LIMITE_PRUEBAS_DIARIO`, `ANULACION_MIXTA` y
   `LLAVE_DE_PRUEBA_EN_PRODUCCION`.
 - RUCs demo: no cobran crédito (`credito_cobrado: false`). La prueba de idempotencia ya no mira el saldo.
+- `comprobantes->descargar($id, 'pdf', ['formato' => 'ticket'])`: PDF en `a4`, `a5`, `ticket` (= `ticket80`),
+  `ticket80`, `ticket58` o `ticket50` (`?formato=`). Sin `formato` no se manda el parámetro (A4 de siempre).
+  `formato` con `xml`/`cdr` o fuera de la lista → `ErrorDeValidacion` local (422, `DATOS_INVALIDOS`,
+  `campos['formato']`) sin petición. Constante `Comprobantes::FORMATOS_PDF`.
+- Nuevo recurso `establecimientos` (anexos): `listar()` (`GET /establecimientos`, se reintenta como GET) y
+  `crear($datos)` (`POST /establecimientos`, `ruc` en el cuerpo, **nunca** se reintenta solo).
+- Nuevo `catalogos->buscarProductoSunat($q, ['limite' => ..., 'ruc' => ...])`
+  (`GET /catalogos/productos-sunat`, catálogo 25); también `nivel`.
+- `FactuSmart\Codigos`: nuevas constantes `PDF_NO_GENERADO`, `LIMITE_ESTABLECIMIENTOS` y `CATALOGO_NO_DISPONIBLE`.
 
 ## 0.1.0 — 2026-10-14
 

@@ -81,7 +81,7 @@ Todos devuelven un `array` con la respuesta JSON del API, salvo `descargar()` qu
 | `$fs->comprobantes->emitir($datos, $opciones)` | `POST /documents` | 1 crédito; siempre con `Idempotency-Key` |
 | `$fs->comprobantes->listar($filtros, $opciones)` | `GET /documents` | filtros: `estado`, `desde`, `hasta`, `limite`, `antes_de` |
 | `$fs->comprobantes->consultar($externalId, $opciones)` | `GET /documents/{id}` | estado guardado + links |
-| `$fs->comprobantes->descargar($externalId, $tipo, $opciones)` | `GET /documents/{id}/{tipo}` | `pdf`, `xml` o `cdr` → string binario |
+| `$fs->comprobantes->descargar($externalId, $tipo, $opciones)` | `GET /documents/{id}/{tipo}` | `pdf`, `xml` o `cdr` → string binario; **nuevo** `$opciones['formato']` (solo pdf): `a4`, `a5`, `ticket`, `ticket80`, `ticket58`, `ticket50` |
 | `$fs->comprobantes->reenviar($externalId, $opciones)` | `POST /documents/{id}/reenviar` | gratis; no se reintenta solo |
 | `$fs->comprobantes->consultarSunat($externalId, $opciones)` | `POST /documents/{id}/consultar-sunat` | consulta en vivo; no se reintenta solo |
 | `$fs->comprobantes->historial($externalId, $opciones)` | `GET /documents/{id}/historial` | línea de tiempo |
@@ -95,6 +95,49 @@ Todos devuelven un `array` con la respuesta JSON del API, salvo `descargar()` qu
 | `$fs->rucs->activar($ruc, $activo)` | `PATCH /rucs/{ruc}/activation` | `true` activa, `false` desactiva |
 | `$fs->catalogos->listar($opciones)` | `GET /catalogos` | **nuevo**; catálogos SUNAT disponibles (`catalogos`) |
 | `$fs->catalogos->consultar($nombre, $opciones)` | `GET /catalogos/{nombre}` | **nuevo**; `$nombre` = `unidades` o número SUNAT (`07`); `$opciones`: `q`, `ruc`. Usa solo filas con `activo: true` |
+| `$fs->catalogos->buscarProductoSunat($q, $opciones)` | `GET /catalogos/productos-sunat` | **nuevo**; código de producto SUNAT (catálogo 25) por código o texto; `$opciones`: `limite` (máx. 50), `nivel`, `ruc` |
+| `$fs->establecimientos->listar($opciones)` | `GET /establecimientos` | **nuevo**; locales (anexos) del RUC con sus series |
+| `$fs->establecimientos->crear($datos, $opciones)` | `POST /establecimientos` | **nuevo**; crea un local; **nunca** se reintenta solo |
+
+### PDF en ticket u otro tamaño
+
+```php
+$pdf = $fs->comprobantes->descargar($externalId, 'pdf', ['formato' => 'ticket']); // 80 mm
+file_put_contents('ticket.pdf', $pdf);
+```
+
+`formato`: `a4`, `a5`, `ticket` (= `ticket80`), `ticket80`, `ticket58`, `ticket50`. Sin `formato` sale el A4
+de siempre. Con `xml`/`cdr`, o un valor fuera de la lista, lanza `ErrorDeValidacion` (`codigo`
+`DATOS_INVALIDOS`, `$e->campos['formato']`) **sin hacer la petición**. Pedir un ticket no cambia el PDF
+que recibe tu cliente final.
+
+### Anexos (establecimientos)
+
+```php
+$r = $fs->establecimientos->listar();
+foreach ($r['establecimientos'] as $local) {
+    echo $local['codigo_anexo'], ' ', $local['nombre'], $local['predeterminado'] ? ' (predeterminado)' : '', "\n";
+}
+
+// Regístralo antes en SUNAT (Clave SOL): el API no lo da de alta allá.
+$nuevo = $fs->establecimientos->crear([
+    'codigo_anexo' => '0001',
+    'nombre' => 'Tienda Miraflores',
+    'direccion' => 'Av. Larco 345',
+    'ubigeo' => '150122',
+    'series' => [['codigo_tipo_documento' => '03', 'serie' => 'B002']], // opcional
+]);
+```
+
+`crear()` nunca se reintenta solo (no es idempotente). Si el plan del RUC no permite más locales lanza
+`RucNoAutorizado` con `codigo` `LIMITE_ESTABLECIMIENTOS`.
+
+### Buscar el código de producto SUNAT
+
+```php
+$r = $fs->catalogos->buscarProductoSunat('computador', ['limite' => 10]);
+// $r['datos'][0]['codigo'] → '43211503'; $r['hay_mas'] indica si hay más resultados
+```
 
 ### Lo que `comprobantes->emitir()` completa por ti
 

@@ -56,6 +56,9 @@ final class ContratoTest extends TestCase
             'calculateDocument' => ['comprobantes', 'calcular'],
             'listCatalogs' => ['catalogos', 'listar'],
             'getCatalog' => ['catalogos', 'consultar'],
+            'searchSunatProductCodes' => ['catalogos', 'buscarProductoSunat'],
+            'listEstablishments' => ['establecimientos', 'listar'],
+            'createEstablishment' => ['establecimientos', 'crear'],
         ];
         foreach ($esperado as $id => $destino) {
             $this->assertContains($id, $ids, "{$id} no está en " . self::rutaYaml());
