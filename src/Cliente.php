@@ -11,6 +11,7 @@ use FactuSmart\Http\TransporteCurl;
 use FactuSmart\Recursos\Anulaciones;
 use FactuSmart\Recursos\Catalogos;
 use FactuSmart\Recursos\Comprobantes;
+use FactuSmart\Recursos\Consultas;
 use FactuSmart\Recursos\Cuenta;
 use FactuSmart\Recursos\Establecimientos;
 use FactuSmart\Recursos\Guias;
@@ -36,6 +37,7 @@ final class Cliente
      * La prueba de contrato falla si el API publica un operationId que no está aquí.
      */
     public const OPERACIONES = [
+        'apiRoot' => [null, 'raiz'],
         'ping' => [null, 'ping'],
         'getAccount' => ['cuenta', 'saldo'],
         'listSeries' => ['series', 'listar'],
@@ -59,6 +61,7 @@ final class Cliente
         'searchSunatProductCodes' => ['catalogos', 'buscarProductoSunat'],
         'listEstablishments' => ['establecimientos', 'listar'],
         'createEstablishment' => ['establecimientos', 'crear'],
+        'lookupDocument' => ['consultas', 'consultar'],
         // Webhook (lo envía el API a tu servidor): el SDK aporta la verificación de la firma.
         'webhookComprobanteEstado' => [null, 'verificarFirmaWebhook'],
     ];
@@ -75,6 +78,7 @@ final class Cliente
     public readonly Rucs $rucs;
     public readonly Catalogos $catalogos;
     public readonly Establecimientos $establecimientos;
+    public readonly Consultas $consultas;
 
     private readonly ClienteHttp $http;
     private readonly ?string $ruc;
@@ -125,6 +129,19 @@ final class Cliente
         $this->rucs = new Rucs($this->http, null);
         $this->catalogos = new Catalogos($this->http, $this->ruc);
         $this->establecimientos = new Establecimientos($this->http, $this->ruc);
+        // Las consultas RUC/DNI no usan RUC emisor: nunca mandan `ruc`.
+        $this->consultas = new Consultas($this->http, null);
+    }
+
+    /**
+     * GET / — raíz del API: confirma que el servicio responde (`estado: ok`) y dónde está la doc.
+     * No necesita API key ni RUC (no manda `ruc`). Para probar tu llave usa ping().
+     * @return array<string, mixed> success, api, docs, estado
+     */
+    public function raiz(): array
+    {
+        /** @var array<string, mixed> */
+        return $this->http->peticion('GET', '/');
     }
 
     /**

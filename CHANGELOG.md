@@ -1,5 +1,22 @@
 # Cambios
 
+## 0.3.0 — 2026-11-06
+
+- Nuevo recurso `consultas` (`GET /consultas/{tipo}/{numero}`, operationId `lookupDocument`):
+  `consultarRuc($numero)`, `consultarDni($numero)` y `consultar($tipo, $numero)`. Devuelve `nombre`,
+  `direccion`, `estado`, `condicion`, `ubigeo` (null si la fuente no los trae), `desde_cache`,
+  `consultas_restantes`, `periodo` (`mes` | `dia`) y `se_renueva`. No gasta créditos y **nunca** manda `ruc`
+  (aunque el cliente tenga uno por defecto). Un `tipo` distinto de `ruc`/`dni` lanza `ErrorDeValidacion`
+  local (422, `DATOS_INVALIDOS`, `campos['tipo']`) sin petición. Se reintenta como un GET.
+- `429 LIMITE_CONSULTAS` (cupo de consultas agotado) lanza `LimiteDePeticiones` tras **una sola** petición
+  (`reintentable: false` manda, como ya pasaba con `LIMITE_PRUEBAS_DIARIO`), con el mensaje del API sin
+  prefijo y `se_renueva` en `$e->respuesta`. `503 CONSULTA_NO_DISPONIBLE` y `429 LIMITE_PETICIONES` sí se reintentan.
+- `FactuSmart\Codigos`: nuevas constantes `LIMITE_CONSULTAS` y `CONSULTA_NO_DISPONIBLE`.
+- Nuevo `$fs->raiz()` (`GET /`, operationId `apiRoot`): confirma que el API responde (`estado: ok`).
+- Contrato: `tests/fixtures/openapi.yaml` actualizado a la spec vigente.
+- `Cliente::VERSION` y el User-Agent: `0.3.0`.
+
+
 ## 0.2.0 — 2026-10-14
 
 - Toda excepción trae `$e->codigo` (p.ej. `SIN_CREDITOS`, `NO_ENCONTRADO`), `$e->reintentable` y

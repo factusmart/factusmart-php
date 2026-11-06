@@ -75,6 +75,7 @@ Todos devuelven un `array` con la respuesta JSON del API, salvo `descargar()` qu
 
 | Método | Endpoint | Notas |
 |---|---|---|
+| `$fs->raiz()` | `GET /` | **nuevo**; ¿responde el API? (`estado: ok`); no usa RUC |
 | `$fs->ping($opciones)` | `GET /ping` | prueba la API key; trae `creditos` |
 | `$fs->cuenta->saldo()` | `GET /account` | `creditos_disponibles`, plan, RUCs |
 | `$fs->series->listar($opciones)` | `GET /series` | FA01, BA01, FN01... |
@@ -98,6 +99,7 @@ Todos devuelven un `array` con la respuesta JSON del API, salvo `descargar()` qu
 | `$fs->catalogos->buscarProductoSunat($q, $opciones)` | `GET /catalogos/productos-sunat` | **nuevo**; código de producto SUNAT (catálogo 25) por código o texto; `$opciones`: `limite` (máx. 50), `nivel`, `ruc` |
 | `$fs->establecimientos->listar($opciones)` | `GET /establecimientos` | **nuevo**; locales (anexos) del RUC con sus series |
 | `$fs->establecimientos->crear($datos, $opciones)` | `POST /establecimientos` | **nuevo**; crea un local; **nunca** se reintenta solo |
+| `$fs->consultas->consultarRuc($numero)` / `consultarDni($numero)` / `consultar($tipo, $numero)` | `GET /consultas/{tipo}/{numero}` | **nuevo**; nombre y dirección de un RUC o DNI; gratis (cupo propio); no manda `ruc` |
 
 ### PDF en ticket u otro tamaño
 
@@ -138,6 +140,29 @@ $nuevo = $fs->establecimientos->crear([
 $r = $fs->catalogos->buscarProductoSunat('computador', ['limite' => 10]);
 // $r['datos'][0]['codigo'] → '43211503'; $r['hay_mas'] indica si hay más resultados
 ```
+
+### Consultar un RUC o DNI
+
+```php
+use FactuSmart\Codigos;
+use FactuSmart\Excepciones\{LimiteDePeticiones, NoEncontrado};
+
+try {
+    $c = $fs->consultas->consultarRuc('20131312955');   // o consultarDni('12345678')
+    echo $c['nombre'], ' — ', $c['direccion'] ?? 'sin dirección', "\n";
+    echo "Te quedan {$c['consultas_restantes']} consultas (se renueva el {$c['se_renueva']})\n";
+} catch (NoEncontrado $e) {
+    echo 'Ese número no existe';
+} catch (LimiteDePeticiones $e) {
+    if ($e->codigo === Codigos::LIMITE_CONSULTAS) {
+        echo 'Se acabó el cupo; vuelve el ', $e->respuesta['se_renueva'];
+    }
+}
+```
+
+No gasta créditos ni manda `ruc`. Repetir un número en 30 días responde `desde_cache: true` y no descuenta.
+`estado`, `condicion`, `direccion` y `ubigeo` pueden venir `null`. `LIMITE_CONSULTAS` (429) **no** se
+reintenta; `CONSULTA_NO_DISPONIBLE` (503) sí, como cualquier GET.
 
 ### Lo que `comprobantes->emitir()` completa por ti
 
@@ -242,6 +267,8 @@ Códigos más comunes:
 | `SUNAT_NO_DISPONIBLE` | SUNAT no responde; reintentable |
 | `LIMITE_PETICIONES` | espera `$e->segundosDeEspera` |
 | `LIMITE_PRUEBAS_DIARIO` | RUC demo: llegaste al tope de 200 operaciones/día de la cuenta (429, **no reintentable**; se reinicia a medianoche de Lima) |
+| `LIMITE_CONSULTAS` | se acabó el cupo de consultas RUC/DNI (429, **no reintentable**; ver `se_renueva`) |
+| `CONSULTA_NO_DISPONIBLE` | SUNAT y el respaldo no respondieron la consulta RUC/DNI (503, reintentable) |
 | `ANULACION_MIXTA` | mezclaste facturas y boletas en una anulación (422) |
 | `LLAVE_DE_PRUEBA_EN_PRODUCCION` | usaste una llave de prueba contra un RUC en producción (403) |
 | `ERROR_INTERNO` | error del servidor; reintentable |

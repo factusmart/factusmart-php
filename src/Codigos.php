@@ -46,6 +46,10 @@ final class Codigos
     public const LIMITE_ESTABLECIMIENTOS = 'LIMITE_ESTABLECIMIENTOS';
     /** El catálogo SUNAT pedido no está disponible. */
     public const CATALOGO_NO_DISPONIBLE = 'CATALOGO_NO_DISPONIBLE';
+    /** 429 en GET /consultas: se acabó el cupo de consultas RUC/DNI del periodo. No reintentable (ver `se_renueva`). */
+    public const LIMITE_CONSULTAS = 'LIMITE_CONSULTAS';
+    /** 503 en GET /consultas: ni SUNAT ni el respaldo respondieron. Reintentable; no descontó del cupo. */
+    public const CONSULTA_NO_DISPONIBLE = 'CONSULTA_NO_DISPONIBLE';
 
     private function __construct()
     {

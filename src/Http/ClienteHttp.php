@@ -17,7 +17,7 @@ use FactuSmart\Excepciones\SinCreditos;
  */
 final class ClienteHttp
 {
-    public const VERSION = '0.2.0';
+    public const VERSION = '0.3.0';
 
     /**
      * Estados HTTP que se reintentan (si la operación es reintentable). Además se
@@ -170,8 +170,10 @@ final class ClienteHttp
             || (is_array($datos) && ($datos['codigo'] ?? null) === 'LIMITE_PETICIONES')
             || stripos($mensaje, 'Too Many Attempts') !== false;
         if ($esLimite) {
-            // LIMITE_PRUEBAS_DIARIO (tope diario en RUCs demo) ya trae su propio mensaje claro.
-            $esTopeDiario = is_array($datos) && ($datos['codigo'] ?? null) === 'LIMITE_PRUEBAS_DIARIO';
+            // LIMITE_PRUEBAS_DIARIO (tope diario en RUCs demo) y LIMITE_CONSULTAS (cupo de consultas
+            // RUC/DNI) ya traen su propio mensaje claro.
+            $esTopeDiario = is_array($datos)
+                && in_array($datos['codigo'] ?? null, ['LIMITE_PRUEBAS_DIARIO', 'LIMITE_CONSULTAS'], true);
             return new LimiteDePeticiones(
                 ($esTopeDiario ? '' : 'Límite de peticiones superado. ') . $mensaje,
                 $status,
