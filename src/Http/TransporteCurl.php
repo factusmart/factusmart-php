@@ -10,8 +10,8 @@ final class TransporteCurl implements Transporte
     public function enviar(
         string $metodo,
         string $url,
-        array $cabeceras,
-        ?string $cuerpo,
+        #[\SensitiveParameter] array $cabeceras,
+        #[\SensitiveParameter] ?string $cuerpo,
         int $timeout,
         bool $verificarSsl
     ): Respuesta {

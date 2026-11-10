@@ -94,6 +94,10 @@ Todos devuelven un `array` con la respuesta JSON del API, salvo `descargar()` qu
 | `$fs->rucs->listar()` | `GET /rucs` | |
 | `$fs->rucs->crear($datos)` | `POST /rucs` | idempotente por RUC (`ya_existia`) |
 | `$fs->rucs->activar($ruc, $activo)` | `PATCH /rucs/{ruc}/activation` | `true` activa, `false` desactiva |
+| `$fs->rucs->subirCertificado($ruc, $certificado, $clave)` | `PUT /rucs/{ruc}/certificado` | **nuevo**; `.pfx`/`.p12` por ruta o bytes (el SDK hace el base64); **nunca** se reintenta solo |
+| `$fs->rucs->configurarSunat($ruc, $datos)` | `PUT /rucs/{ruc}/sunat` | **nuevo**; `usuario_sol` + `clave_sol` y/o `entorno` (`prueba`/`produccion`); **nunca** se reintenta solo |
+| `$fs->rucs->verificar($ruc)` | `POST /rucs/{ruc}/verificar` | **nuevo**; prueba certificado y SOL contra SUNAT sin emitir; se reintenta como un GET |
+| `$fs->rucs->configuracion($ruc)` | `GET /rucs/{ruc}/configuracion` | **nuevo**; entorno, certificado, SOL enmascarado y `faltantes` |
 | `$fs->catalogos->listar($opciones)` | `GET /catalogos` | **nuevo**; catálogos SUNAT disponibles (`catalogos`) |
 | `$fs->catalogos->consultar($nombre, $opciones)` | `GET /catalogos/{nombre}` | **nuevo**; `$nombre` = `unidades` o número SUNAT (`07`); `$opciones`: `q`, `ruc`. Usa solo filas con `activo: true` |
 | `$fs->catalogos->buscarProductoSunat($q, $opciones)` | `GET /catalogos/productos-sunat` | **nuevo**; código de producto SUNAT (catálogo 25) por código o texto; `$opciones`: `limite` (máx. 50), `nivel`, `ruc` |
@@ -163,6 +167,44 @@ try {
 No gasta créditos ni manda `ruc`. Repetir un número en 30 días responde `desde_cache: true` y no descuenta.
 `estado`, `condicion`, `direccion` y `ubigeo` pueden venir `null`. `LIMITE_CONSULTAS` (429) **no** se
 reintenta; `CONSULTA_NO_DISPONIBLE` (503) sí, como cualquier GET.
+
+### Configurar un RUC por API (certificado, SOL y producción)
+
+```php
+use FactuSmart\Excepciones\ErrorDeValidacion;
+
+$ruc = '20777666555';
+try {
+    // 1. Certificado: ruta del archivo o sus bytes (file_get_contents, lo que subió tu usuario...).
+    $r = $fs->rucs->subirCertificado($ruc, '/ruta/certificado.pfx', $clavePfx);
+    echo "Vence el {$r['certificado']['vence']}
+";       // ruc_coincide: true | null (+ aviso)
+
+    // 2. Usuario secundario SOL y paso a producción (pueden ir en el mismo pedido).
+    $fs->rucs->configurarSunat($ruc, ['usuario_sol' => 'FACTURA1', 'clave_sol' => $claveSol, 'entorno' => 'produccion']);
+
+    // 3. Prueba real contra SUNAT, sin emitir nada.
+    $v = $fs->rucs->verificar($ruc);
+    if (!$v['listo_para_emitir']) {
+        echo $v['checks']['sol']['mensaje'];              // ok: true | false | null (no aplica / SUNAT no respondió)
+    }
+} catch (ErrorDeValidacion $e) {
+    echo $e->mensaje;                                     // clave incorrecta, vencido, de otro RUC, falta algo...
+    print_r($e->respuesta['faltantes'] ?? []);            // al pasar a producción: certificado, sol...
+}
+
+// En cualquier momento, sin llamar a SUNAT:
+$cfg = $fs->rucs->configuracion($ruc);   // entorno, certificado.vence, sol.usuario ('FA*****1'), faltantes
+```
+
+- El RUC va **solo en la ruta** (11 dígitos; se valida antes de enviar). No se usa el RUC por defecto del cliente.
+- `$certificado`: si el string trae un byte nulo, no es UTF-8 válido o empieza con `0x30` (como todo `.pfx`),
+  se toma como **bytes**; si no, como **ruta**, y si el archivo no existe falla sin enviar nada. Máx. 5 MB.
+- Las claves (`clave`, `clave_sol`) y el contenido del certificado **nunca** salen en los mensajes de error del
+  SDK ni en `$e->respuesta`/`$e->campos` (se tapan con `***`), ni en la traza de la excepción (PHP ≥ 8.2,
+  `#[\SensitiveParameter]`).
+- La llave de prueba (`fs_test_…`) no puede subir certificados ni cambiar SOL/entorno (`403 SIN_PERMISO`);
+  `verificar()` y `configuracion()` sí funcionan con ella. Ninguno consume crédito.
 
 ### Lo que `comprobantes->emitir()` completa por ti
 
@@ -337,10 +379,10 @@ $r = $fs->anulaciones->crear([
   `LimiteDePeticiones` tras **una sola** petición, con `$e->codigo === Codigos::LIMITE_PRUEBAS_DIARIO` y
   `$e->reintentable === false`. Decide por `$e->codigo`, no por la clase. Si el servidor no manda
   `reintentable`, se usa la regla por HTTP.
-- Se reintentan: todas las consultas (GET), `comprobantes->calcular()` (no tiene efectos),
+- Se reintentan: todas las consultas (GET), `comprobantes->calcular()` y `rucs->verificar()` (no tienen efectos),
   `comprobantes->emitir()` y `rucs->crear()` (idempotente por RUC).
 - **Nunca** se reintentan solos: `anulaciones->crear()`, `guias->emitir()`, `comprobantes->reenviar()`,
-  `comprobantes->consultarSunat()`, `rucs->activar()`.
+  `comprobantes->consultarSunat()`, `rucs->activar()`, `rucs->subirCertificado()`, `rucs->configurarSunat()`.
 - `maxReintentos => 0` desactiva los reintentos.
 
 ## RUCs demo (modo prueba)

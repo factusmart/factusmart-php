@@ -1,5 +1,24 @@
 # Cambios
 
+## 0.4.0 — 2026-11-10
+
+- Configuración del RUC por API (tag «Configuración del RUC»), en el recurso `rucs`:
+  - `subirCertificado($ruc, $certificado, $clave)` → `PUT /rucs/{ruc}/certificado` (`uploadRucCertificate`).
+    `$certificado` es la ruta de un `.pfx`/`.p12` o sus bytes; el SDK lo lee y lo codifica en base64.
+    Bytes = trae byte nulo, no es UTF-8 o empieza con `0x30`; si no, es ruta y debe existir (si no, error sin
+    petición). Máx. 5 MB. No se reintenta solo.
+  - `configurarSunat($ruc, $datos)` → `PUT /rucs/{ruc}/sunat` (`updateRucSunat`): `usuario_sol`, `clave_sol`,
+    `entorno` (`prueba` | `produccion`). Solo manda esas claves. No se reintenta solo.
+  - `verificar($ruc)` → `POST /rucs/{ruc}/verificar` (`verifyRucConfig`), sin cuerpo; se reintenta como un GET.
+  - `configuracion($ruc)` → `GET /rucs/{ruc}/configuracion` (`getRucConfig`).
+  - El RUC va solo en la ruta (se valida que tenga 11 dígitos); nunca `X-RUC`, `?ruc=` ni el RUC por defecto.
+- Seguridad: las claves y el certificado enviados se tapan con `***` en el cuerpo de cualquier respuesta de
+  error antes de crear la excepción (`getMessage()`, `$e->mensaje`, `$e->respuesta`, `$e->campos`, `$e->errores`),
+  también si vienen escapados en JSON; un error de red en esas llamadas no adjunta la excepción previa.
+  Cuerpo, cabeceras (API key) y claves van marcados `#[\SensitiveParameter]`: en PHP ≥ 8.2 no salen en las trazas.
+- Contrato: `tests/fixtures/openapi.yaml` actualizado a la spec vigente.
+- `Cliente::VERSION` y el User-Agent: `0.4.0`.
+
 ## 0.3.0 — 2026-11-06
 
 - Nuevo recurso `consultas` (`GET /consultas/{tipo}/{numero}`, operationId `lookupDocument`):

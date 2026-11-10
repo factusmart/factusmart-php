@@ -17,7 +17,7 @@ use FactuSmart\Excepciones\SinCreditos;
  */
 final class ClienteHttp
 {
-    public const VERSION = '0.3.0';
+    public const VERSION = '0.4.0';
 
     /**
      * Estados HTTP que se reintentan (si la operación es reintentable). Además se
@@ -50,18 +50,22 @@ final class ClienteHttp
      * @param bool $reintentable  si se puede repetir sin riesgo de duplicar (GET, calcular, emitir con Idempotency-Key, crear RUC)
      * @param bool $reintentar409 solo emitir: 409 = "emisión en curso con esa Idempotency-Key"
      * @param bool $binario       devolver los bytes del cuerpo en vez de decodificar JSON
+     * @param array<int, string> $secretos valores enviados (claves, certificado) que NUNCA deben salir en
+     *                            una excepción: se tapan con "***" en el cuerpo de error antes de crearla
      * @return array<mixed>|string
      */
     public function peticion(
         string $metodo,
         string $ruta,
         array $query = [],
-        ?array $cuerpo = null,
+        #[\SensitiveParameter] ?array $cuerpo = null,
         array $cabecerasExtra = [],
         bool $reintentable = true,
         bool $reintentar409 = false,
-        bool $binario = false
+        bool $binario = false,
+        #[\SensitiveParameter] array $secretos = []
     ): array|string {
+        $secretos = self::variantesSecretas($secretos);
         $url = $this->baseUrl . $ruta;
         $query = array_filter($query, static fn ($v) => $v !== null && $v !== '');
         if ($query !== []) {
@@ -91,6 +95,10 @@ final class ClienteHttp
                     $intento++;
                     continue;
                 }
+                if ($secretos !== []) {
+                    // Sin la excepción previa: su mensaje no se puede limpiar.
+                    throw new FactuSmartError('No se pudo conectar con FactuSmart: ' . self::tapar($e->getMessage(), $secretos));
+                }
                 throw new FactuSmartError('No se pudo conectar con FactuSmart: ' . $e->getMessage(), 0, null, $e);
             }
 
@@ -100,11 +108,14 @@ final class ClienteHttp
                 }
                 $datos = $this->decodificar($respuesta->cuerpo);
                 if (!is_array($datos)) {
-                    throw new FactuSmartError('Respuesta del API no es JSON válido.', $respuesta->status, $respuesta->cuerpo);
+                    throw new FactuSmartError('Respuesta del API no es JSON válido.', $respuesta->status, $secretos === [] ? $respuesta->cuerpo : self::tapar($respuesta->cuerpo, $secretos));
                 }
                 return $datos;
             }
 
+            if ($secretos !== []) {
+                $respuesta = new Respuesta($respuesta->status, $respuesta->cabeceras, self::tapar($respuesta->cuerpo, $secretos));
+            }
             $error = $this->crearError($respuesta);
             if ($error instanceof LimiteDePeticiones) {
                 $esperaSugerida = $error->segundosDeEspera;
@@ -133,6 +144,39 @@ final class ClienteHttp
 
             throw $error;
         }
+    }
+
+    /**
+     * Cada secreto tal cual y como aparece escapado dentro de un JSON; los más largos primero.
+     * Se ignoran los de menos de 3 caracteres (taparían texto normal del mensaje).
+     *
+     * @param array<int, mixed> $secretos
+     * @return array<int, string>
+     */
+    private static function variantesSecretas(#[\SensitiveParameter] array $secretos): array
+    {
+        $salida = [];
+        foreach ($secretos as $s) {
+            if (!is_string($s) || strlen($s) < 3) {
+                continue;
+            }
+            $salida[] = $s;
+            foreach ([JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES, 0] as $flags) {
+                $j = json_encode($s, $flags | JSON_INVALID_UTF8_SUBSTITUTE);
+                if (is_string($j) && strlen($j) > 2) {
+                    $salida[] = substr($j, 1, -1);
+                }
+            }
+        }
+        $salida = array_values(array_unique($salida));
+        usort($salida, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        return $salida;
+    }
+
+    /** @param array<int, string> $secretos */
+    private static function tapar(string $texto, #[\SensitiveParameter] array $secretos): string
+    {
+        return str_replace($secretos, '***', $texto);
     }
 
     /** Espera creciente 1, 2, 4... s; si el API dijo cuánto esperar, se respeta. */
