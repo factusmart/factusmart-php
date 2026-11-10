@@ -1,5 +1,16 @@
 # Cambios
 
+## 0.5.0 — 2026-11-10
+
+- `rucs->configurarSunat($ruc, $datos)` acepta la **modalidad de firma** (`PUT /rucs/{ruc}/sunat`):
+  `modalidad` (`propio` | `pse`) y, con Smart PSE, `pse_usuario` + `pse_clave` (credenciales CPE de la
+  empresa en Smart PSE). Pares incompletos (`pse_usuario` sin `pse_clave`, o `usuario_sol` sin
+  `clave_sol`) fallan localmente, sin petición.
+- `pse_clave` se reemplaza por `***` en el mensaje, la respuesta y los campos de cualquier error,
+  igual que `clave_sol`. El PUT sigue sin reintentarse.
+- La respuesta documenta `modalidad`, `pse{proveedor, configurado, usuario}` y `aviso`; `verificar()`
+  trae `modalidad` y `checks.pse` con Smart PSE.
+
 ## 0.4.0 — 2026-11-10
 
 - Configuración del RUC por API (tag «Configuración del RUC»), en el recurso `rucs`:

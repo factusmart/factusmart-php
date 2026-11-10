@@ -17,6 +17,7 @@ final class ConfiguracionRucTest extends TestCase
     private const RUC = '20777666555';
     private const CLAVE = 'ClaveDelPfx-9x!';
     private const CLAVE_SOL = 'ClaveSol/"9"';
+    private const PSE_CLAVE = '379VMR6U';
 
     /** Bytes que imitan un .pfx (DER: empieza con 0x30 y trae bytes nulos). */
     private const PFX = "\x30\x82\x0A\x5E\x02\x01\x03\x30\x82\x0A\x24\x06\x09\x2A\x86\x48\x86\xF7\x0D\x01\x07\x01\xA0\x00\x00\xFFcontenido-secreto";
@@ -140,6 +141,10 @@ final class ConfiguracionRucTest extends TestCase
             fn () => $c->rucs->subirCertificado(self::RUC, self::PFX, ''),
             fn () => $c->rucs->configurarSunat(self::RUC, []),
             fn () => $c->rucs->configurarSunat(self::RUC, ['entorno' => 'real']),
+            fn () => $c->rucs->configurarSunat(self::RUC, ['modalidad' => 'ose']),
+            fn () => $c->rucs->configurarSunat(self::RUC, ['modalidad' => 'pse', 'pse_usuario' => 'FURZQQ7F']),
+            fn () => $c->rucs->configurarSunat(self::RUC, ['modalidad' => 'pse', 'pse_clave' => self::PSE_CLAVE]),
+            fn () => $c->rucs->configurarSunat(self::RUC, ['usuario_sol' => 'FACTURA1']),
             fn () => $c->rucs->verificar('abc'),
             fn () => $c->rucs->configuracion('207776665551'),
         ] as $i => $llamada) {
@@ -272,6 +277,79 @@ final class ConfiguracionRucTest extends TestCase
             $this->assertNull($e->getPrevious());
         }
         $this->assertCount(1, $t->peticiones, 'PUT del certificado: no se reintenta');
+    }
+
+    private static function respuestaConfigPse(): array
+    {
+        return ['success' => true, 'ruc' => self::RUC, 'nombre' => 'API TENANT CLEAN SAC', 'entorno' => 'produccion',
+            'certificado' => ['instalado' => false, 'vence' => null, 'dias_para_vencer' => null],
+            'sol' => ['configurado' => false, 'usuario' => null], 'envio' => 'pse', 'modalidad' => 'pse',
+            'pse' => ['proveedor' => 'smartpse', 'configurado' => true, 'usuario' => 'FU*****F'],
+            'listo_para_produccion' => true, 'faltantes' => [],
+            'aviso' => 'Con Smart PSE el contribuyente debe designar a Smart PSE como su PSE en SUNAT.'];
+    }
+
+    public function testConfigurarSunatConSmartPse(): void
+    {
+        $t = new TransporteFalso([
+            TransporteFalso::json(200, self::respuestaConfigPse()),
+            TransporteFalso::json(200, self::respuestaConfig()),
+            TransporteFalso::json(200, self::respuestaConfigPse()),
+        ]);
+        $c = $this->cliente($t);
+        $r = $c->rucs->configurarSunat(self::RUC, [
+            'modalidad' => 'pse', 'pse_usuario' => 'FURZQQ7F', 'pse_clave' => self::PSE_CLAVE, 'entorno' => 'produccion',
+        ]);
+        $p = $t->peticiones[0];
+        $this->assertSame('PUT', $p['metodo']);
+        $this->sinRucExtra($p);
+        $this->assertSame(['modalidad' => 'pse', 'pse_usuario' => 'FURZQQ7F', 'pse_clave' => self::PSE_CLAVE, 'entorno' => 'produccion'], json_decode((string) $p['cuerpo'], true));
+        $this->assertSame('pse', $r['modalidad']);
+        $this->assertSame('FU*****F', $r['pse']['usuario']);
+        $this->assertStringContainsString('Smart PSE', $r['aviso']);
+
+        $c->rucs->configurarSunat(self::RUC, ['modalidad' => 'propio']);
+        $this->assertSame(['modalidad' => 'propio'], json_decode((string) $t->peticiones[1]['cuerpo'], true));
+        // Repetir 'pse' sin credenciales (la API lo permite) y 'demo' como sinónimo de prueba.
+        $c->rucs->configurarSunat(self::RUC, ['modalidad' => 'pse', 'entorno' => 'demo']);
+        $this->assertSame(['modalidad' => 'pse', 'entorno' => 'demo'], json_decode((string) $t->peticiones[2]['cuerpo'], true));
+    }
+
+    public function testUn422DeSmartPseNoFiltraLaClavePseYNoSeReintenta(): void
+    {
+        $eco = 'Smart PSE rechazó la clave ' . self::PSE_CLAVE;
+        $t = new TransporteFalso([
+            TransporteFalso::json(422, ['success' => false, 'message' => $eco, 'codigo' => 'DATOS_INVALIDOS', 'reintentable' => false,
+                'campos' => ['pse_clave' => [$eco]]]),
+            TransporteFalso::json(200, self::respuestaConfigPse()),
+        ]);
+        try {
+            $this->cliente($t)->rucs->configurarSunat(self::RUC, [
+                'modalidad' => 'pse', 'pse_usuario' => 'FURZQQ7F', 'pse_clave' => self::PSE_CLAVE,
+                'usuario_sol' => 'FACTURA1', 'clave_sol' => self::CLAVE_SOL,
+            ]);
+            $this->fail('Debió lanzar ErrorDeValidacion');
+        } catch (ErrorDeValidacion $e) {
+            $todo = $e->getMessage() . $e->mensaje . json_encode($e->respuesta) . json_encode($e->campos)
+                . $e->getTraceAsString() . print_r($e, true);
+            $this->assertStringNotContainsString(self::PSE_CLAVE, $todo);
+            $this->assertSame('Smart PSE rechazó la clave ***', $e->getMessage());
+            $this->assertSame(['pse_clave' => ['Smart PSE rechazó la clave ***']], $e->campos);
+        }
+        $this->assertCount(1, $t->peticiones);
+    }
+
+    public function testVerificarConSmartPseTraeChecksPse(): void
+    {
+        $t = new TransporteFalso([TransporteFalso::json(200, ['success' => true, 'ruc' => self::RUC, 'listo_para_emitir' => true,
+            'entorno' => 'produccion', 'modalidad' => 'pse', 'checks' => [
+                'certificado' => ['ok' => null, 'mensaje' => 'Este RUC envía por PSE.'],
+                'sol' => ['ok' => null, 'mensaje' => 'Este RUC envía por PSE.'],
+                'pse' => ['ok' => true, 'mensaje' => 'Smart PSE aceptó el usuario y la clave.'],
+            ]])]);
+        $r = $this->cliente($t)->rucs->verificar(self::RUC);
+        $this->assertSame('pse', $r['modalidad']);
+        $this->assertTrue($r['checks']['pse']['ok']);
     }
 
     public function testContratoMapeaLasCuatroOperaciones(): void

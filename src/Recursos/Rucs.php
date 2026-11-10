@@ -88,24 +88,46 @@ final class Rucs extends Recurso
     }
 
     /**
-     * PUT /rucs/{ruc}/sunat — guarda el usuario secundario SOL y su clave, y/o cambia el entorno.
-     * No llama a SUNAT (para eso: verificar()). No se reintenta solo.
+     * PUT /rucs/{ruc}/sunat — guarda el usuario secundario SOL y su clave, la modalidad de firma
+     * (certificado propio o Smart PSE) y/o cambia el entorno. No llama a SUNAT (para eso: verificar()).
+     * No se reintenta solo.
      *
-     * @param array{usuario_sol?: string, clave_sol?: string, entorno?: string} $datos
-     *        `usuario_sol` y `clave_sol` van juntos; `entorno`: `prueba` | `produccion`.
-     * @return array<string, mixed> la configuración resultante (igual que configuracion()), sin claves
+     * - `usuario_sol` y `clave_sol` van juntos; `entorno`: `prueba` | `produccion` (`demo` = `prueba`).
+     * - `modalidad`: `propio` (tu certificado, directo a SUNAT) | `pse` (Smart PSE firma y envía, sin
+     *   certificado propio). Con `pse` manda la primera vez `pse_usuario` + `pse_clave` (van juntos): las
+     *   credenciales CPE de la empresa en tu panel de Smart PSE. La respuesta trae un `aviso`: el
+     *   contribuyente debe designar a Smart PSE como su PSE en SUNAT.
+     * - `clave_sol` y `pse_clave` nunca aparecen en una excepción del SDK (se reemplazan por `***`).
+     *
+     * @param array{usuario_sol?: string, clave_sol?: string, entorno?: string, modalidad?: string, pse_usuario?: string, pse_clave?: string} $datos
+     * @return array<string, mixed> la configuración resultante (igual que configuracion(), con
+     *         `modalidad`, `pse{proveedor, configurado, usuario}` o null, y `aviso` si aplica), sin claves
      */
     public function configurarSunat(string $ruc, #[\SensitiveParameter] array $datos): array
     {
         $ruta = self::rutaRuc($ruc, '/sunat');
-        $cuerpo = array_intersect_key($datos, ['usuario_sol' => 1, 'clave_sol' => 1, 'entorno' => 1]);
+        $campos = ['usuario_sol' => 1, 'clave_sol' => 1, 'entorno' => 1, 'modalidad' => 1, 'pse_usuario' => 1, 'pse_clave' => 1];
+        $cuerpo = array_filter(array_intersect_key($datos, $campos), static fn ($v) => $v !== null);
         if ($cuerpo === []) {
-            throw new FactuSmartError('configurarSunat(): manda usuario_sol + clave_sol, o entorno, o los tres.');
+            throw new FactuSmartError('configurarSunat(): manda usuario_sol + clave_sol, entorno y/o modalidad (con pse_usuario + pse_clave).');
         }
         if (isset($cuerpo['entorno']) && !in_array($cuerpo['entorno'], ['prueba', 'produccion', 'demo'], true)) {
             throw new FactuSmartError('configurarSunat(): entorno debe ser "prueba" o "produccion".');
         }
-        $secretos = isset($cuerpo['clave_sol']) && is_string($cuerpo['clave_sol']) ? [$cuerpo['clave_sol']] : [];
+        if (isset($cuerpo['modalidad']) && !in_array($cuerpo['modalidad'], ['propio', 'pse'], true)) {
+            throw new FactuSmartError('configurarSunat(): modalidad debe ser "propio" o "pse".');
+        }
+        foreach ([['usuario_sol', 'clave_sol'], ['pse_usuario', 'pse_clave']] as [$a, $b]) {
+            if (isset($cuerpo[$a]) !== isset($cuerpo[$b])) {
+                throw new FactuSmartError("configurarSunat(): {$a} y {$b} van juntos (manda los dos).");
+            }
+        }
+        $secretos = [];
+        foreach (['clave_sol', 'pse_clave'] as $k) {
+            if (isset($cuerpo[$k]) && is_string($cuerpo[$k]) && $cuerpo[$k] !== '') {
+                $secretos[] = $cuerpo[$k];
+            }
+        }
 
         /** @var array<string, mixed> */
         return $this->http->peticion('PUT', $ruta, [], $cuerpo, reintentable: false, secretos: $secretos);
@@ -115,7 +137,7 @@ final class Rucs extends Recurso
      * POST /rucs/{ruc}/verificar — prueba real del certificado y del usuario SOL contra SUNAT, sin emitir.
      * No tiene efectos, por eso se reintenta como un GET.
      *
-     * @return array<string, mixed> success, ruc, listo_para_emitir, entorno, checks{certificado{ok, mensaje}, sol{ok, mensaje}}
+     * @return array<string, mixed> success, ruc, listo_para_emitir, entorno, modalidad, checks{certificado{ok, mensaje}, sol{ok, mensaje}, pse{ok, mensaje} (solo con Smart PSE)}
      */
     public function verificar(string $ruc): array
     {

@@ -95,7 +95,7 @@ Todos devuelven un `array` con la respuesta JSON del API, salvo `descargar()` qu
 | `$fs->rucs->crear($datos)` | `POST /rucs` | idempotente por RUC (`ya_existia`) |
 | `$fs->rucs->activar($ruc, $activo)` | `PATCH /rucs/{ruc}/activation` | `true` activa, `false` desactiva |
 | `$fs->rucs->subirCertificado($ruc, $certificado, $clave)` | `PUT /rucs/{ruc}/certificado` | **nuevo**; `.pfx`/`.p12` por ruta o bytes (el SDK hace el base64); **nunca** se reintenta solo |
-| `$fs->rucs->configurarSunat($ruc, $datos)` | `PUT /rucs/{ruc}/sunat` | **nuevo**; `usuario_sol` + `clave_sol` y/o `entorno` (`prueba`/`produccion`); **nunca** se reintenta solo |
+| `$fs->rucs->configurarSunat($ruc, $datos)` | `PUT /rucs/{ruc}/sunat` | `usuario_sol` + `clave_sol`, `entorno` (`prueba`/`produccion`) y/o `modalidad` (`propio`/`pse`, con `pse_usuario` + `pse_clave`); **nunca** se reintenta solo |
 | `$fs->rucs->verificar($ruc)` | `POST /rucs/{ruc}/verificar` | **nuevo**; prueba certificado y SOL contra SUNAT sin emitir; se reintenta como un GET |
 | `$fs->rucs->configuracion($ruc)` | `GET /rucs/{ruc}/configuracion` | **nuevo**; entorno, certificado, SOL enmascarado y `faltantes` |
 | `$fs->catalogos->listar($opciones)` | `GET /catalogos` | **nuevo**; catálogos SUNAT disponibles (`catalogos`) |
@@ -195,6 +195,20 @@ try {
 
 // En cualquier momento, sin llamar a SUNAT:
 $cfg = $fs->rucs->configuracion($ruc);   // entorno, certificado.vence, sol.usuario ('FA*****1'), faltantes
+```
+
+**Sin certificado propio, con Smart PSE.** Da de alta la empresa en tu panel/API de Smart PSE y manda sus
+credenciales CPE; Smart PSE firma y envía por ti:
+
+```php
+$cfg = $fs->rucs->configurarSunat($ruc, [
+    'modalidad' => 'pse', 'pse_usuario' => $pseUsuario, 'pse_clave' => $pseClave, 'entorno' => 'produccion',
+]);
+echo $cfg['pse']['usuario'];   // 'FU*****F' (la clave nunca se devuelve ni sale en un error del SDK)
+echo $cfg['aviso'];            // designa a Smart PSE como tu PSE en SUNAT (con la Clave SOL)
+$v = $fs->rucs->verificar($ruc);
+var_dump($v['checks']['pse']['ok']);   // pide un token a Smart PSE, no emite
+$fs->rucs->configurarSunat($ruc, ['modalidad' => 'propio']);   // volver a tu certificado
 ```
 
 - El RUC va **solo en la ruta** (11 dígitos; se valida antes de enviar). No se usa el RUC por defecto del cliente.

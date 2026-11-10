@@ -253,7 +253,7 @@ final class CodigosYWebhooksTest extends TestCase
     {
         $t = new TransporteFalso([TransporteFalso::json(200, ['success' => true])]);
         $this->cliente($t)->cuenta->saldo();
-        $this->assertSame('0.4.0', Cliente::VERSION);
-        $this->assertStringStartsWith('factusmart-php/0.4.0 ', $t->peticiones[0]['cabeceras']['User-Agent']);
+        $this->assertSame('0.5.0', Cliente::VERSION);
+        $this->assertStringStartsWith('factusmart-php/0.5.0 ', $t->peticiones[0]['cabeceras']['User-Agent']);
     }
 }
