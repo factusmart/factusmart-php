@@ -50,6 +50,16 @@ final class Codigos
     public const LIMITE_CONSULTAS = 'LIMITE_CONSULTAS';
     /** 503 en GET /consultas: ni SUNAT ni el respaldo respondieron. Reintentable; no descontó del cupo. */
     public const CONSULTA_NO_DISPONIBLE = 'CONSULTA_NO_DISPONIBLE';
+    /**
+     * 429 en POST /rucs/{ruc}/verificar y PUT /rucs/{ruc}/sunat (con claves): más de 10 verificaciones por hora
+     * para la misma llave y RUC. Reintentable tras `Retry-After` ($e->segundosDeEspera), pero el SDK NO lo repite
+     * solo (la espera puede ser de varios minutos): decide tú cuándo volver a intentar.
+     */
+    public const LIMITE_VERIFICACIONES = 'LIMITE_VERIFICACIONES';
+    /** 422 en PUT /rucs/{ruc}/sunat: pasar a `prueba` un RUC en producción exige `confirmar: true`. No reintentable. */
+    public const CONFIRMAR_CAMBIO_ENTORNO = 'CONFIRMAR_CAMBIO_ENTORNO';
+    /** 503 en PUT /rucs/{ruc}/sunat: Smart PSE no respondió (RUC en producción). No se guardó nada. Reintentable más tarde. */
+    public const PSE_NO_DISPONIBLE = 'PSE_NO_DISPONIBLE';
 
     private function __construct()
     {

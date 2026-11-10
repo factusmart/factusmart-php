@@ -71,4 +71,16 @@ final class ContratoTest extends TestCase
         $sobran = array_values(array_diff(array_keys(Cliente::OPERACIONES), self::operationIds()));
         $this->assertSame([], $sobran, 'Métodos del SDK cuyo operationId ya no existe en el API: ' . implode(', ', $sobran));
     }
+
+    public function testCadaCodigoDeErrorDelApiTieneSuConstante(): void
+    {
+        $yaml = (string) file_get_contents(self::rutaYaml());
+        $this->assertSame(1, preg_match('/^    CodigoError:\r?\n(.*?)\r?\n    [A-Za-z]+:\r?\n/ms', $yaml, $m), 'falta CodigoError en el yaml');
+        preg_match_all('/^\s+- ([A-Z_]+)\s*$/m', $m[1], $valores);
+        $this->assertNotEmpty($valores[1]);
+        $constantes = (new \ReflectionClass(\FactuSmart\Codigos::class))->getConstants();
+        foreach ($valores[1] as $codigo) {
+            $this->assertSame($codigo, $constantes[$codigo] ?? null, "Falta Codigos::{$codigo}");
+        }
+    }
 }

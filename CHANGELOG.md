@@ -1,5 +1,21 @@
 # Cambios
 
+## 0.6.0 — 2026-11-10
+
+- `rucs->configurarSunat()` acepta `confirmar` (bool, opcional; solo se envía si lo pasas): obligatorio en
+  `true` para pasar a `entorno: prueba` un RUC que ya emite en producción.
+- Códigos nuevos en `FactuSmart\Codigos`: `LIMITE_VERIFICACIONES` (429, máx. 10 verificaciones por hora por
+  llave y RUC), `CONFIRMAR_CAMBIO_ENTORNO` (422, no reintentable) y `PSE_NO_DISPONIBLE` (503, reintentable).
+  `RUC_DESACTIVADO` (403) aplica ahora también a certificado, sunat y verificar.
+- `429 LIMITE_VERIFICACIONES` lanza `LimiteDePeticiones` con `segundosDeEspera` (de `Retry-After`) y **no** se
+  reintenta solo: la espera puede ser de varios minutos.
+- Docblocks y README: los dos caminos para producción (`propio`: certificado + SOL; `pse`: credenciales Smart
+  PSE + SOL, sin certificado), la designación de Smart PSE en SUNAT (que `verificar()` no comprueba), el
+  faltante `certificado_otro_ruc`, `sol` también con `pse` en producción y `aviso` en `configuracion()`.
+- Contrato: `tests/fixtures/openapi.yaml` actualizado; nueva prueba que exige una constante por cada valor del
+  enum `CodigoError`.
+- `Cliente::VERSION` y el User-Agent: `0.6.0`.
+
 ## 0.5.0 — 2026-11-10
 
 - `rucs->configurarSunat($ruc, $datos)` acepta la **modalidad de firma** (`PUT /rucs/{ruc}/sunat`):

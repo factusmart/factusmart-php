@@ -95,7 +95,7 @@ Todos devuelven un `array` con la respuesta JSON del API, salvo `descargar()` qu
 | `$fs->rucs->crear($datos)` | `POST /rucs` | idempotente por RUC (`ya_existia`) |
 | `$fs->rucs->activar($ruc, $activo)` | `PATCH /rucs/{ruc}/activation` | `true` activa, `false` desactiva |
 | `$fs->rucs->subirCertificado($ruc, $certificado, $clave)` | `PUT /rucs/{ruc}/certificado` | **nuevo**; `.pfx`/`.p12` por ruta o bytes (el SDK hace el base64); **nunca** se reintenta solo |
-| `$fs->rucs->configurarSunat($ruc, $datos)` | `PUT /rucs/{ruc}/sunat` | `usuario_sol` + `clave_sol`, `entorno` (`prueba`/`produccion`) y/o `modalidad` (`propio`/`pse`, con `pse_usuario` + `pse_clave`); **nunca** se reintenta solo |
+| `$fs->rucs->configurarSunat($ruc, $datos)` | `PUT /rucs/{ruc}/sunat` | `usuario_sol` + `clave_sol`, `entorno` (`prueba`/`produccion`) y/o `modalidad` (`propio`/`pse`, con `pse_usuario` + `pse_clave`) y `confirmar` (producción → prueba); **nunca** se reintenta solo |
 | `$fs->rucs->verificar($ruc)` | `POST /rucs/{ruc}/verificar` | **nuevo**; prueba certificado y SOL contra SUNAT sin emitir; se reintenta como un GET |
 | `$fs->rucs->configuracion($ruc)` | `GET /rucs/{ruc}/configuracion` | **nuevo**; entorno, certificado, SOL enmascarado y `faltantes` |
 | `$fs->catalogos->listar($opciones)` | `GET /catalogos` | **nuevo**; catálogos SUNAT disponibles (`catalogos`) |
@@ -197,19 +197,55 @@ try {
 $cfg = $fs->rucs->configuracion($ruc);   // entorno, certificado.vence, sol.usuario ('FA*****1'), faltantes
 ```
 
-**Sin certificado propio, con Smart PSE.** Da de alta la empresa en tu panel/API de Smart PSE y manda sus
-credenciales CPE; Smart PSE firma y envía por ti:
+**Dos caminos para producción** (Smart PSE es el único PSE):
+
+| Modalidad | Quién firma | Qué necesitas para `produccion` |
+|---|---|---|
+| `propio` | tu certificado, directo a SUNAT | certificado (`subirCertificado`) + usuario SOL |
+| `pse` | Smart PSE, **sin certificado propio** | `pse_usuario` + `pse_clave` (usuario_secundaria y token_acceso de la empresa en Smart PSE) + usuario SOL |
 
 ```php
+// Camino Smart PSE: sin certificado. El SOL también hace falta en producción (Consultar CDR, arreglo del 1033).
 $cfg = $fs->rucs->configurarSunat($ruc, [
-    'modalidad' => 'pse', 'pse_usuario' => $pseUsuario, 'pse_clave' => $pseClave, 'entorno' => 'produccion',
+    'modalidad' => 'pse', 'pse_usuario' => $pseUsuario, 'pse_clave' => $pseClave,
+    'usuario_sol' => 'FACTURA1', 'clave_sol' => $claveSol, 'entorno' => 'produccion',
 ]);
 echo $cfg['pse']['usuario'];   // 'FU*****F' (la clave nunca se devuelve ni sale en un error del SDK)
-echo $cfg['aviso'];            // designa a Smart PSE como tu PSE en SUNAT (con la Clave SOL)
+echo $cfg['aviso'];            // recuerda designar a Smart PSE como tu PSE en SUNAT
 $v = $fs->rucs->verificar($ruc);
 var_dump($v['checks']['pse']['ok']);   // pide un token a Smart PSE, no emite
 $fs->rucs->configurarSunat($ruc, ['modalidad' => 'propio']);   // volver a tu certificado
 ```
+
+> **Antes de emitir en producción con Smart PSE**, el contribuyente debe designar a Smart PSE como su PSE en
+> SUNAT (Clave SOL → Empresas → PSE). `verificar()` **no** puede comprobar esa designación.
+
+**Volver de producción a prueba** exige `'confirmar' => true` (los comprobantes de prueba no tienen validez y
+usan la misma numeración). Sin él: `ErrorDeValidacion` con `codigo` `CONFIRMAR_CAMBIO_ENTORNO` y no se guarda nada.
+
+```php
+try {
+    $fs->rucs->configurarSunat($ruc, ['entorno' => 'prueba']);
+} catch (ErrorDeValidacion $e) {
+    if ($e->codigo === Codigos::CONFIRMAR_CAMBIO_ENTORNO) {
+        $cfg = $fs->rucs->configurarSunat($ruc, ['entorno' => 'prueba', 'confirmar' => true]);   // trae `aviso`
+    }
+}
+```
+
+Errores propios de la configuración del RUC:
+
+| `codigo` | HTTP | Qué hacer |
+|---|---|---|
+| `RUC_DESACTIVADO` | 403 | RUC bloqueado o plan vencido: reactívalo. Aplica a `subirCertificado`, `configurarSunat` y `verificar` (`configuracion` sigue respondiendo) |
+| `LIMITE_VERIFICACIONES` | 429 | más de 10 verificaciones por hora para la misma llave y RUC (`verificar`, o `configurarSunat` con claves). Espera `$e->segundosDeEspera` (cabecera `Retry-After`); el SDK **no** lo repite solo porque la espera puede ser de varios minutos |
+| `CONFIRMAR_CAMBIO_ENTORNO` | 422 | repite con `'confirmar' => true` si de verdad quieres pasar a prueba. No reintentable |
+| `PSE_NO_DISPONIBLE` | 503 | Smart PSE no respondió con el RUC en producción; no se guardó nada. Reintenta más tarde |
+
+`configuracion()['faltantes']` puede traer `certificado`, `certificado_vencido`, `certificado_sin_clave_privada`,
+`certificado_otro_ruc` (el certificado instalado no es de este RUC; solo con `propio`), `sol` (también con `pse`
+en producción) y `pse_credenciales`. Puede traer `aviso` (designar a Smart PSE, o el certificado vence en < 30 días).
+La respuesta siempre trae `modalidad` y `pse` (`null` con `propio`).
 
 - El RUC va **solo en la ruta** (11 dígitos; se valida antes de enviar). No se usa el RUC por defecto del cliente.
 - `$certificado`: si el string trae un byte nulo, no es UTF-8 válido o empieza con `0x30` (como todo `.pfx`),
@@ -325,6 +361,9 @@ Códigos más comunes:
 | `LIMITE_PRUEBAS_DIARIO` | RUC demo: llegaste al tope de 200 operaciones/día de la cuenta (429, **no reintentable**; se reinicia a medianoche de Lima) |
 | `LIMITE_CONSULTAS` | se acabó el cupo de consultas RUC/DNI (429, **no reintentable**; ver `se_renueva`) |
 | `CONSULTA_NO_DISPONIBLE` | SUNAT y el respaldo no respondieron la consulta RUC/DNI (503, reintentable) |
+| `LIMITE_VERIFICACIONES` | más de 10 verificaciones por hora del RUC (429, reintentable tras `$e->segundosDeEspera`; el SDK no lo repite solo) |
+| `CONFIRMAR_CAMBIO_ENTORNO` | pasar a prueba un RUC en producción exige `'confirmar' => true` (422) |
+| `PSE_NO_DISPONIBLE` | Smart PSE no respondió; no se guardó nada (503, reintentable más tarde) |
 | `ANULACION_MIXTA` | mezclaste facturas y boletas en una anulación (422) |
 | `LLAVE_DE_PRUEBA_EN_PRODUCCION` | usaste una llave de prueba contra un RUC en producción (403) |
 | `ERROR_INTERNO` | error del servidor; reintentable |
@@ -393,6 +432,8 @@ $r = $fs->anulaciones->crear([
   `LimiteDePeticiones` tras **una sola** petición, con `$e->codigo === Codigos::LIMITE_PRUEBAS_DIARIO` y
   `$e->reintentable === false`. Decide por `$e->codigo`, no por la clase. Si el servidor no manda
   `reintentable`, se usa la regla por HTTP.
+- `429 LIMITE_VERIFICACIONES` tampoco se repite solo (aunque sea `reintentable: true`): su `Retry-After` puede
+  ser de media hora. Lanza `LimiteDePeticiones` con `$e->segundosDeEspera`.
 - Se reintentan: todas las consultas (GET), `comprobantes->calcular()` y `rucs->verificar()` (no tienen efectos),
   `comprobantes->emitir()` y `rucs->crear()` (idempotente por RUC).
 - **Nunca** se reintentan solos: `anulaciones->crear()`, `guias->emitir()`, `comprobantes->reenviar()`,

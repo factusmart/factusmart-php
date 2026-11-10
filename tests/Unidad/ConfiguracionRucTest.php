@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace FactuSmart\Pruebas\Unidad;
 
 use FactuSmart\Cliente;
+use FactuSmart\Codigos;
+use FactuSmart\Excepciones\LimiteDePeticiones;
+use FactuSmart\Excepciones\RucNoAutorizado;
 use FactuSmart\Excepciones\ErrorDeValidacion;
 use FactuSmart\Excepciones\FactuSmartError;
 use FactuSmart\Http\ErrorDeRed;
@@ -350,6 +353,88 @@ final class ConfiguracionRucTest extends TestCase
         $r = $this->cliente($t)->rucs->verificar(self::RUC);
         $this->assertSame('pse', $r['modalidad']);
         $this->assertTrue($r['checks']['pse']['ok']);
+    }
+
+    public function testConfirmarSoloSeEnviaSiSePasa(): void
+    {
+        $t = new TransporteFalso([
+            TransporteFalso::json(422, ['success' => false, 'message' => 'El RUC emite en producción. Repite con confirmar: true.',
+                'codigo' => 'CONFIRMAR_CAMBIO_ENTORNO', 'reintentable' => false]),
+            TransporteFalso::json(200, self::respuestaConfig() + ['aviso' => 'Pasó a prueba.']),
+        ]);
+        $c = $this->cliente($t);
+        try {
+            $c->rucs->configurarSunat(self::RUC, ['entorno' => 'prueba']);
+            $this->fail('Debió lanzar ErrorDeValidacion');
+        } catch (ErrorDeValidacion $e) {
+            $this->assertSame(Codigos::CONFIRMAR_CAMBIO_ENTORNO, $e->codigo);
+            $this->assertFalse($e->reintentable);
+        }
+        $this->assertCount(1, $t->peticiones, 'no se reintenta');
+        $this->assertSame(['entorno' => 'prueba'], json_decode((string) $t->peticiones[0]['cuerpo'], true));
+
+        $r = $c->rucs->configurarSunat(self::RUC, ['entorno' => 'prueba', 'confirmar' => true]);
+        $this->assertSame(['entorno' => 'prueba', 'confirmar' => true], json_decode((string) $t->peticiones[1]['cuerpo'], true));
+        $this->assertSame('Pasó a prueba.', $r['aviso']);
+    }
+
+    public function testConfirmarSoloOConTipoInvalidoFallaSinPeticion(): void
+    {
+        $t = new TransporteFalso([]);
+        foreach ([['confirmar' => true], ['entorno' => 'prueba', 'confirmar' => 'si']] as $i => $datos) {
+            try {
+                $this->cliente($t)->rucs->configurarSunat(self::RUC, $datos);
+                $this->fail("Caso {$i}: debió lanzar");
+            } catch (FactuSmartError $e) {
+                $this->assertSame(0, $e->status, "Caso {$i}");
+            }
+        }
+        $this->assertCount(0, $t->peticiones);
+    }
+
+    public function testLimiteVerificacionesNoSeReintentaYTraeLaEspera(): void
+    {
+        $t = new TransporteFalso([
+            TransporteFalso::json(429, ['success' => false, 'message' => 'Hiciste más de 10 verificaciones en una hora para este RUC. Espera 1800 segundos e intenta de nuevo.',
+                'retry_after' => 1800, 'codigo' => 'LIMITE_VERIFICACIONES', 'reintentable' => true], ['retry-after' => '1800']),
+            TransporteFalso::json(200, ['success' => true]),
+        ]);
+        try {
+            $this->cliente($t)->rucs->verificar(self::RUC);
+            $this->fail('Debió lanzar LimiteDePeticiones');
+        } catch (LimiteDePeticiones $e) {
+            $this->assertSame(Codigos::LIMITE_VERIFICACIONES, $e->codigo);
+            $this->assertSame(1800, $e->segundosDeEspera);
+            $this->assertTrue($e->reintentable);
+            $this->assertStringStartsWith('Hiciste más de 10', $e->getMessage());
+        }
+        $this->assertCount(1, $t->peticiones);
+        $this->assertSame([], $this->esperas, 'no se queda dormido');
+    }
+
+    public function testPseNoDisponibleYRucDesactivado(): void
+    {
+        $t = new TransporteFalso([
+            TransporteFalso::json(503, ['success' => false, 'message' => 'Smart PSE no respondió.', 'codigo' => 'PSE_NO_DISPONIBLE', 'reintentable' => true]),
+            TransporteFalso::json(403, ['success' => false, 'message' => 'Este RUC está desactivado o su plan venció.', 'codigo' => 'RUC_DESACTIVADO', 'reintentable' => false]),
+        ]);
+        $c = $this->cliente($t);
+        try {
+            $c->rucs->configurarSunat(self::RUC, ['modalidad' => 'pse', 'pse_usuario' => 'FURZQQ7F', 'pse_clave' => self::PSE_CLAVE]);
+            $this->fail('Debió lanzar');
+        } catch (FactuSmartError $e) {
+            $this->assertSame(Codigos::PSE_NO_DISPONIBLE, $e->codigo);
+            $this->assertSame(503, $e->status);
+            $this->assertTrue($e->reintentable);
+        }
+        $this->assertCount(1, $t->peticiones, 'el PUT no se reintenta solo');
+        try {
+            $c->rucs->verificar(self::RUC);
+            $this->fail('Debió lanzar');
+        } catch (RucNoAutorizado $e) {
+            $this->assertSame(Codigos::RUC_DESACTIVADO, $e->codigo);
+        }
+        $this->assertCount(2, $t->peticiones);
     }
 
     public function testContratoMapeaLasCuatroOperaciones(): void

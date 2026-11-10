@@ -17,7 +17,7 @@ use FactuSmart\Excepciones\SinCreditos;
  */
 final class ClienteHttp
 {
-    public const VERSION = '0.5.0';
+    public const VERSION = '0.6.0';
 
     /**
      * Estados HTTP que se reintentan (si la operación es reintentable). Además se
@@ -123,9 +123,12 @@ final class ClienteHttp
 
             // `reintentable: false` explícito en el cuerpo MANDA: no se repite aunque el HTTP sea
             // 429/409/5xx (p.ej. 429 LIMITE_PRUEBAS_DIARIO). Sin la clave → regla por HTTP.
-            $noReintentar = is_array($error->respuesta)
-                && array_key_exists('reintentable', $error->respuesta)
-                && $error->respuesta['reintentable'] === false;
+            // LIMITE_VERIFICACIONES es reintentable para el API, pero su Retry-After puede ser de
+            // media hora: el SDK no se queda dormido, lanza LimiteDePeticiones con segundosDeEspera.
+            $noReintentar = is_array($error->respuesta) && (
+                (array_key_exists('reintentable', $error->respuesta) && $error->respuesta['reintentable'] === false)
+                || ($error->respuesta['codigo'] ?? null) === 'LIMITE_VERIFICACIONES'
+            );
 
             $puedeReintentar = $reintentable && !$noReintentar && (
                 in_array($respuesta->status, self::ESTADOS_REINTENTABLES, true)
@@ -214,10 +217,10 @@ final class ClienteHttp
             || (is_array($datos) && ($datos['codigo'] ?? null) === 'LIMITE_PETICIONES')
             || stripos($mensaje, 'Too Many Attempts') !== false;
         if ($esLimite) {
-            // LIMITE_PRUEBAS_DIARIO (tope diario en RUCs demo) y LIMITE_CONSULTAS (cupo de consultas
-            // RUC/DNI) ya traen su propio mensaje claro.
+            // LIMITE_PRUEBAS_DIARIO (tope diario en RUCs demo), LIMITE_CONSULTAS (cupo de consultas
+            // RUC/DNI) y LIMITE_VERIFICACIONES (10 por hora por RUC) ya traen su propio mensaje claro.
             $esTopeDiario = is_array($datos)
-                && in_array($datos['codigo'] ?? null, ['LIMITE_PRUEBAS_DIARIO', 'LIMITE_CONSULTAS'], true);
+                && in_array($datos['codigo'] ?? null, ['LIMITE_PRUEBAS_DIARIO', 'LIMITE_CONSULTAS', 'LIMITE_VERIFICACIONES'], true);
             return new LimiteDePeticiones(
                 ($esTopeDiario ? '' : 'Límite de peticiones superado. ') . $mensaje,
                 $status,
