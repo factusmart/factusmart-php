@@ -47,6 +47,28 @@ final class Guias extends Recurso
     }
 
     /**
+     * POST /guias/{external_id}/reenviar — reintenta enviar a SUNAT una guía que quedó en `01` (Registrado).
+     * NUNCA se reintenta solo. Cobra 1 crédito solo si el envío sale bien. Trae `serie_numero`, `external_id`,
+     * `enviado`, `estado`, `mensaje`, `links` (`xml`, `pdf`, `cdr`), `envio` y el resumen del crédito.
+     * Envío fallido (no se cobra) o guía que no está en `01` (trae `estado`): ErrorDeValidacion con codigo
+     * `REENVIO_FALLIDO`. Guía inexistente: NoEncontrado. Luego consulta estado().
+     *
+     * @param array<string, mixed> $opciones ruc
+     * @return array<string, mixed>
+     */
+    public function reenviar(string $externalId, array $opciones = []): array
+    {
+        /** @var array<string, mixed> */
+        return $this->http->peticion(
+            'POST',
+            '/guias/' . self::segmento($externalId, 'externalId') . '/reenviar',
+            [],
+            $this->conRuc([], $opciones),
+            reintentable: false
+        );
+    }
+
+    /**
      * GET /guias/{external_id}/{type} — devuelve los BYTES del archivo (string binario): el PDF (A4),
      * el XML firmado o el CDR de la guía. El CDR solo existe cuando SUNAT la aceptó; si falta, lanza
      * NoEncontrado (codigo NO_ENCONTRADO): consulta estado() y vuelve a intentar.

@@ -60,6 +60,11 @@ final class Codigos
     public const CONFIRMAR_CAMBIO_ENTORNO = 'CONFIRMAR_CAMBIO_ENTORNO';
     /** 503 en PUT /rucs/{ruc}/sunat: Smart PSE no respondió (RUC en producción). No se guardó nada. Reintentable más tarde. */
     public const PSE_NO_DISPONIBLE = 'PSE_NO_DISPONIBLE';
+    /**
+     * 422 en POST /documents (nota de crédito): sumada a las notas de crédito vivas del comprobante afectado,
+     * pasaría su total. El mensaje dice cuánto queda disponible; no se emitió ni se cobró. No reintentable.
+     */
+    public const NOTA_EXCEDE_COMPROBANTE = 'NOTA_EXCEDE_COMPROBANTE';
 
     private function __construct()
     {

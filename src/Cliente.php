@@ -53,6 +53,7 @@ final class Cliente
         'downloadVoidedFile' => ['anulaciones', 'descargar'],
         'emitDispatchGuide' => ['guias', 'emitir'],
         'getDispatchGuideStatus' => ['guias', 'estado'],
+        'resendDispatchGuide' => ['guias', 'reenviar'],
         'downloadDispatchGuideFile' => ['guias', 'descargar'],
         'listRucs' => ['rucs', 'listar'],
         'createRuc' => ['rucs', 'crear'],

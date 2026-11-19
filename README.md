@@ -92,6 +92,7 @@ Todos devuelven un `array` con la respuesta JSON del API, salvo `descargar()` qu
 | `$fs->anulaciones->descargar($ticket, $tipo, $opciones)` | `GET /anulaciones/{ticket}/{tipo}` | **nuevo**; `xml` o `cdr` (ZIP) → string binario; sin PDF |
 | `$fs->guias->emitir($datos, $opciones)` | `POST /guias` | revisa `enviado`; **nunca** se reintenta solo |
 | `$fs->guias->estado($externalId, $opciones)` | `GET /guias/{id}/status` | trae `links` |
+| `$fs->guias->reenviar($externalId, $opciones)` | `POST /guias/{id}/reenviar` | **nuevo**; reenvía a SUNAT una guía en `01`; **nunca** se reintenta solo |
 | `$fs->guias->descargar($externalId, $tipo, $opciones)` | `GET /guias/{id}/{tipo}` | **nuevo**; `pdf`, `xml` o `cdr` → string binario |
 | `$fs->rucs->listar()` | `GET /rucs` | |
 | `$fs->rucs->crear($datos)` | `POST /rucs` | idempotente por RUC (`ya_existia`) |
@@ -133,6 +134,25 @@ file_put_contents('baja-cdr.zip', $fs->anulaciones->descargar($anulacion['ticket
 Si el archivo aún no existe (por ejemplo el CDR antes de que SUNAT responda), lanza `NoEncontrado`
 (`codigo` `NO_ENCONTRADO`): consulta `estado()` y vuelve a intentar. Un tipo que no corresponde (`pdf` en
 una anulación) lanza `FactuSmartError` sin hacer la petición.
+
+### Reenviar una guía que quedó en 01 (Registrado)
+
+Si `guias->emitir()` respondió `enviado: false` (por ejemplo, credenciales GRE mal configuradas), corrige la
+causa y reintenta el envío a SUNAT. Cobra 1 crédito solo si el envío sale bien.
+
+```php
+try {
+    $r = $fs->guias->reenviar($guia['external_id']); // enviado, estado, mensaje, links, envio y el crédito
+} catch (\FactuSmart\Excepciones\ErrorDeValidacion $e) {
+    if ($e->codigo === \FactuSmart\Codigos::REENVIO_FALLIDO) {
+        echo $e->mensaje; // no se cobró; si la guía no está en 01, $e->respuesta['estado'] dice en cuál está
+    }
+}
+```
+
+`REENVIO_FALLIDO` (422) llega cuando el envío falla (no se cobra, `reintentable: true`) o cuando la guía no
+está en `01` (trae `estado`). Si no existe: `NoEncontrado`. El SDK **no** lo repite solo; luego consulta
+`guias->estado()`.
 
 ### Enlaces de descarga (`links`)
 
@@ -395,6 +415,8 @@ Códigos más comunes:
 | `CONFIRMAR_CAMBIO_ENTORNO` | pasar a prueba un RUC en producción exige `'confirmar' => true` (422) |
 | `PSE_NO_DISPONIBLE` | Smart PSE no respondió; no se guardó nada (503, reintentable más tarde) |
 | `ANULACION_MIXTA` | mezclaste facturas y boletas en una anulación (422) |
+| `NOTA_EXCEDE_COMPROBANTE` | la nota de crédito, sumada a las notas vivas del comprobante afectado, pasaría su total; el mensaje dice cuánto queda (422, **no reintentable**; no se emitió ni se cobró) |
+| `REENVIO_FALLIDO` | `comprobantes->reenviar()` / `guias->reenviar()` no se completó; no se cobró (422, mira `$e->reintentable`) |
 | `LLAVE_DE_PRUEBA_EN_PRODUCCION` | usaste una llave de prueba contra un RUC en producción (403) |
 | `ERROR_INTERNO` | error del servidor; reintentable |
 
@@ -466,7 +488,7 @@ $r = $fs->anulaciones->crear([
   ser de media hora. Lanza `LimiteDePeticiones` con `$e->segundosDeEspera`.
 - Se reintentan: todas las consultas (GET), `comprobantes->calcular()` y `rucs->verificar()` (no tienen efectos),
   `comprobantes->emitir()` y `rucs->crear()` (idempotente por RUC).
-- **Nunca** se reintentan solos: `anulaciones->crear()`, `guias->emitir()`, `comprobantes->reenviar()`,
+- **Nunca** se reintentan solos: `anulaciones->crear()`, `guias->emitir()`, `guias->reenviar()`, `comprobantes->reenviar()`,
   `comprobantes->consultarSunat()`, `rucs->activar()`, `rucs->subirCertificado()`, `rucs->configurarSunat()`.
 - `maxReintentos => 0` desactiva los reintentos.
 

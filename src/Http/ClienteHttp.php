@@ -17,7 +17,7 @@ use FactuSmart\Excepciones\SinCreditos;
  */
 final class ClienteHttp
 {
-    public const VERSION = '0.7.0';
+    public const VERSION = '0.8.0';
 
     /**
      * Estados HTTP que se reintentan (si la operación es reintentable). Además se

@@ -1,5 +1,21 @@
 # Cambios
 
+## 0.8.0 — 2026-11-19
+
+- `guias->reenviar($externalId, $opciones)` (`POST /guias/{external_id}/reenviar`): reintenta enviar a SUNAT una
+  guía que quedó en `01` (Registrado). Cobra 1 crédito solo si el envío sale bien. Nunca se reintenta solo.
+  `422 REENVIO_FALLIDO` → `ErrorDeValidacion` (envío fallido, no se cobra; o la guía no está en `01`, con
+  `estado`); `404` → `NoEncontrado`.
+
+  ```php
+  $r = $fs->guias->reenviar($guia['external_id']);
+  echo $r['enviado'] ? $r['links']['pdf'] : $r['mensaje'];
+  ```
+- Nuevo código `Codigos::NOTA_EXCEDE_COMPROBANTE` (422, no reintentable): la nota de crédito, sumada a las
+  notas vivas del comprobante afectado, pasaría su total.
+- Contrato: `tests/fixtures/openapi.yaml` actualizado; `Cliente::OPERACIONES` suma `resendDispatchGuide`.
+- `Cliente::VERSION` y el User-Agent: `0.8.0`.
+
 ## 0.7.0 — 2026-11-18
 
 - `guias->descargar($externalId, $tipo, $opciones)` (`GET /guias/{external_id}/{tipo}`): bytes del PDF (A4), del
