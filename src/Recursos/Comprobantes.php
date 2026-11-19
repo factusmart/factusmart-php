@@ -22,6 +22,9 @@ final class Comprobantes extends Recurso
      *
      * Ojo: HTTP 200 NO significa aceptado. Revisa $r['aceptado_por_sunat'].
      *
+     * La respuesta trae `links` (array<string, string>): `pdf`, `pdf_ticket`, `xml`, `cdr` — URLs
+     * absolutas de descarga que piden tu X-API-Key (para bajar el archivo, usa descargar()).
+     *
      * @param array<string, mixed> $datos    payload tal cual lo define el API
      * @param array<string, mixed> $opciones ruc, idempotencyKey
      * @return array<string, mixed>
@@ -84,7 +87,8 @@ final class Comprobantes extends Recurso
     }
 
     /**
-     * GET /documents — lista del más reciente al más antiguo.
+     * GET /documents — lista del más reciente al más antiguo. Cada comprobante trae `links`
+     * (`pdf`, `pdf_ticket`, `xml`, `cdr`).
      * @param array<string, mixed> $filtros  estado, desde, hasta, limite, antes_de
      * @param array<string, mixed> $opciones ruc
      * @return array<string, mixed>
@@ -99,6 +103,8 @@ final class Comprobantes extends Recurso
 
     /**
      * GET /documents/{external_id} — estado guardado (no consulta a SUNAT en vivo).
+     * La respuesta trae `links` (array<string, string>): `pdf`, `pdf_ticket`, `xml`, `cdr` — URLs
+     * absolutas de descarga que piden tu X-API-Key (para bajar el archivo, usa descargar()).
      * @param array<string, mixed> $opciones ruc
      * @return array<string, mixed>
      */
@@ -165,6 +171,7 @@ final class Comprobantes extends Recurso
 
     /**
      * POST /documents/{external_id}/reenviar — reintenta el envío a SUNAT. No se reintenta solo.
+     * Trae `links` (`pdf`, `pdf_ticket`, `xml`, `cdr`).
      * @param array<string, mixed> $opciones ruc
      * @return array<string, mixed>
      */
@@ -182,6 +189,7 @@ final class Comprobantes extends Recurso
 
     /**
      * POST /documents/{external_id}/consultar-sunat — pregunta a SUNAT en vivo. No se reintenta solo.
+     * Trae `links` (`pdf`, `pdf_ticket`, `xml`, `cdr`).
      * @param array<string, mixed> $opciones ruc
      * @return array<string, mixed>
      */
@@ -198,7 +206,7 @@ final class Comprobantes extends Recurso
     }
 
     /**
-     * GET /documents/{external_id}/historial — línea de tiempo del comprobante.
+     * GET /documents/{external_id}/historial — línea de tiempo del comprobante. Trae `links`.
      * @param array<string, mixed> $opciones ruc
      * @return array<string, mixed>
      */

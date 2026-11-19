@@ -1,5 +1,20 @@
 # Cambios
 
+## 0.7.0 — 2026-11-18
+
+- `guias->descargar($externalId, $tipo, $opciones)` (`GET /guias/{external_id}/{tipo}`): bytes del PDF (A4), del
+  XML firmado o del CDR de la guía (`pdf`, `xml`, `cdr`). Acepta `ruc` como las demás descargas. Archivo
+  inexistente → `NoEncontrado` (`NO_ENCONTRADO`). Se reintenta como cualquier GET.
+- `anulaciones->descargar($ticket, $tipo, $opciones)` (`GET /anulaciones/{ticket}/{tipo}`): XML enviado y CDR
+  (ZIP) de la comunicación de baja o del resumen (`xml`, `cdr`). Sin PDF: `pdf` lanza `FactuSmartError` sin
+  petición.
+- Docblocks y README: las respuestas traen `links` — `pdf`, `pdf_ticket`, `xml`, `cdr` en los comprobantes
+  (emitir, listar, consultar, reenviar, consultarSunat, historial); `xml`, `pdf`, `cdr` en `guias->estado` y en
+  `envio.links` de `guias->emitir`; `xml`, `cdr` en `anulaciones->crear` y `anulaciones->estado`.
+- Contrato: `tests/fixtures/openapi.yaml` actualizado; `Cliente::OPERACIONES` suma `downloadDispatchGuideFile`
+  y `downloadVoidedFile`.
+- `Cliente::VERSION` y el User-Agent: `0.7.0`.
+
 ## 0.6.0 — 2026-11-10
 
 - `rucs->configurarSunat()` acepta `confirmar` (bool, opcional; solo se envía si lo pasas): obligatorio en

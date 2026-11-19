@@ -89,8 +89,10 @@ Todos devuelven un `array` con la respuesta JSON del API, salvo `descargar()` qu
 | `$fs->comprobantes->calcular($items, $opciones)` | `POST /calcular` | **nuevo**; el servidor arma `items` y `totales`; gratis, no emite; `$opciones`: `porcentaje_igv` (18 o 10.5) |
 | `$fs->anulaciones->crear($datos, $opciones)` | `POST /anulaciones` | facturas y boletas; 1 crédito; **nunca** se reintenta solo |
 | `$fs->anulaciones->estado($ticket, $opciones)` | `GET /anulaciones/{ticket}/status` | trae `tipo` y `documentos[]` |
+| `$fs->anulaciones->descargar($ticket, $tipo, $opciones)` | `GET /anulaciones/{ticket}/{tipo}` | **nuevo**; `xml` o `cdr` (ZIP) → string binario; sin PDF |
 | `$fs->guias->emitir($datos, $opciones)` | `POST /guias` | revisa `enviado`; **nunca** se reintenta solo |
-| `$fs->guias->estado($externalId, $opciones)` | `GET /guias/{id}/status` | |
+| `$fs->guias->estado($externalId, $opciones)` | `GET /guias/{id}/status` | trae `links` |
+| `$fs->guias->descargar($externalId, $tipo, $opciones)` | `GET /guias/{id}/{tipo}` | **nuevo**; `pdf`, `xml` o `cdr` → string binario |
 | `$fs->rucs->listar()` | `GET /rucs` | |
 | `$fs->rucs->crear($datos)` | `POST /rucs` | idempotente por RUC (`ya_existia`) |
 | `$fs->rucs->activar($ruc, $activo)` | `PATCH /rucs/{ruc}/activation` | `true` activa, `false` desactiva |
@@ -116,6 +118,34 @@ file_put_contents('ticket.pdf', $pdf);
 de siempre. Con `xml`/`cdr`, o un valor fuera de la lista, lanza `ErrorDeValidacion` (`codigo`
 `DATOS_INVALIDOS`, `$e->campos['formato']`) **sin hacer la petición**. Pedir un ticket no cambia el PDF
 que recibe tu cliente final.
+
+### Archivos de guías y anulaciones
+
+Igual que `comprobantes->descargar()`: devuelven los bytes. La guía tiene PDF (A4), XML firmado y CDR (este
+solo cuando SUNAT la aceptó). La anulación (comunicación de baja o resumen) tiene XML y CDR, **sin PDF**.
+
+```php
+file_put_contents('guia.pdf', $fs->guias->descargar($guia['external_id'], 'pdf'));
+file_put_contents('baja.xml', $fs->anulaciones->descargar($anulacion['ticket'], 'xml'));
+file_put_contents('baja-cdr.zip', $fs->anulaciones->descargar($anulacion['ticket'], 'cdr'));
+```
+
+Si el archivo aún no existe (por ejemplo el CDR antes de que SUNAT responda), lanza `NoEncontrado`
+(`codigo` `NO_ENCONTRADO`): consulta `estado()` y vuelve a intentar. Un tipo que no corresponde (`pdf` en
+una anulación) lanza `FactuSmartError` sin hacer la petición.
+
+### Enlaces de descarga (`links`)
+
+Las respuestas traen `links` con URLs absolutas de descarga (piden tu `X-API-Key`):
+
+| Respuesta | `links` |
+|---|---|
+| `comprobantes->emitir`, `listar` (cada comprobante), `consultar`, `reenviar`, `consultarSunat`, `historial` | `pdf`, `pdf_ticket`, `xml`, `cdr` |
+| `guias->estado` (y `guias->emitir` dentro de `$r['envio']['links']`) | `xml`, `pdf`, `cdr` |
+| `anulaciones->crear`, `anulaciones->estado` | `xml`, `cdr` |
+
+Úsalas para guardarlas o pasarlas a tu backend; para bajar el archivo desde tu código, lo más simple es
+`descargar()`.
 
 ### Anexos (establecimientos)
 
