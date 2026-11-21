@@ -9,7 +9,8 @@ use FactuSmart\Excepciones\FactuSmartError;
 
 $fs = new Cliente([
     'apiKey' => getenv('FACTUSMART_API_KEY'),
-    'baseUrl' => getenv('FACTUSMART_BASE_URL'),   // ej. https://s2.factusmart.pe/api/v1/issuer
+    // Solo con llaves del formato anterior (con fs_live_… se usa https://app.factusmart.pe/api/v1/issuer):
+    'baseUrl' => getenv('FACTUSMART_BASE_URL'),
     'ruc' => getenv('FACTUSMART_RUC'),
 ]);
 

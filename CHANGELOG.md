@@ -1,5 +1,19 @@
 # Cambios
 
+## 0.9.0 — 2026-11-21
+
+- `baseUrl` ahora es **opcional**. Con una llave de formato nuevo (`fs_live_…` / `fs_test_…` con la cuenta)
+  y sin `baseUrl`, el cliente usa `https://app.factusmart.pe/api/v1/issuer`:
+
+  ```php
+  $fs = new FactuSmart\Cliente(['apiKey' => 'fs_live_...', 'ruc' => '20100070970']);
+  ```
+- Con una llave del formato anterior `baseUrl` sigue siendo obligatoria (`FactuSmartError` con un mensaje
+  nuevo que explica cómo pedir la llave nueva). Si pasas `baseUrl`, se respeta tal cual, como antes.
+- Nuevos `Cliente::URL_BASE_PREDETERMINADA` y `Cliente::esLlaveNueva($apiKey)`.
+- Ejemplos y mensajes: `https://app.factusmart.pe/api/v1/issuer`.
+- `Cliente::VERSION` y el User-Agent: `0.9.0`.
+
 ## 0.8.0 — 2026-11-19
 
 - `guias->reenviar($externalId, $opciones)` (`POST /guias/{external_id}/reenviar`): reintenta enviar a SUNAT una

@@ -22,15 +22,23 @@ use FactuSmart\Recursos\Series;
  * Cliente del API de facturación electrónica de FactuSmart.
  *
  *   $fs = new FactuSmart\Cliente([
- *       'apiKey'  => 'TU_API_KEY',
- *       'baseUrl' => 'https://TU_URL_BASE/api/v1/issuer',
- *       'ruc'     => '20100070970',
+ *       'apiKey' => 'fs_live_...',
+ *       'ruc'    => '20100070970',
  *   ]);
  *   $r = $fs->comprobantes->emitir([...]);
+ *
+ * `baseUrl` es opcional con una llave de formato nuevo (usa {@see self::URL_BASE_PREDETERMINADA});
+ * con una llave del formato anterior es obligatoria (la "URL base de la API" de tu panel).
  */
 final class Cliente
 {
     public const VERSION = ClienteHttp::VERSION;
+
+    /** URL base que se usa cuando no pasas `baseUrl` y tu llave es de formato nuevo. */
+    public const URL_BASE_PREDETERMINADA = 'https://app.factusmart.pe/api/v1/issuer';
+
+    /** Llave de formato nuevo: `fs_live_` / `fs_test_` + cuenta + secreto. */
+    private const PATRON_LLAVE_NUEVA = '/^fs_(live|test)_A[0-9A-HJKMNP-TV-Z]{11}_[A-Za-z0-9]{32,128}$/D';
 
     /**
      * operationId del openapi.yaml => [recurso, método]. Recurso null = método del propio Cliente.
@@ -106,10 +114,13 @@ final class Cliente
             throw new FactuSmartError('Falta "apiKey": la encuentras en tu panel de integrador, pestaña Configuración.');
         }
         if ($baseUrl === '') {
-            throw new FactuSmartError('Falta "baseUrl": cada cuenta vive en un servidor distinto; copia la "URL base de la API" de tu panel (ej. https://s2.factusmart.pe/api/v1/issuer).');
+            if (!self::esLlaveNueva($apiKey)) {
+                throw new FactuSmartError('Falta baseUrl: tu llave es del formato anterior; copia la "URL base de la API" de tu panel de integrador, o pide tu llave nueva (fs_live_…) en el panel y no necesitarás baseUrl.');
+            }
+            $baseUrl = self::URL_BASE_PREDETERMINADA;
         }
         if (!preg_match('#^https?://#i', $baseUrl)) {
-            throw new FactuSmartError('"baseUrl" debe empezar con https:// (ej. https://s2.factusmart.pe/api/v1/issuer).');
+            throw new FactuSmartError('"baseUrl" debe empezar con https:// (ej. https://app.factusmart.pe/api/v1/issuer).');
         }
 
         $timeout = (int) ($opciones['timeout'] ?? 60);
@@ -183,6 +194,15 @@ final class Cliente
             return false;
         }
         return hash_equals(hash_hmac('sha256', $cuerpoCrudo, $secreto), $firma);
+    }
+
+    /**
+     * `true` si la llave es de formato nuevo (`fs_live_A…_…` / `fs_test_A…_…`). Esas llaves se atienden en
+     * {@see self::URL_BASE_PREDETERMINADA}; las del formato anterior solo en la URL de su servidor (la de su panel).
+     */
+    public static function esLlaveNueva(string $apiKey): bool
+    {
+        return preg_match(self::PATRON_LLAVE_NUEVA, $apiKey) === 1;
     }
 
     /**

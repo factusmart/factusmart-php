@@ -18,7 +18,7 @@ composer require factusmart/sdk
 ## Uso en 10 líneas
 
 ```php
-$fs = new FactuSmart\Cliente(['apiKey' => 'TU_API_KEY', 'baseUrl' => 'https://TU_URL_BASE/api/v1/issuer', 'ruc' => '20100070970']);
+$fs = new FactuSmart\Cliente(['apiKey' => 'fs_live_...', 'ruc' => '20100070970']);
 
 ['items' => $items, 'totales' => $totales] = FactuSmart\Cliente::calcularComprobante([
     ['descripcion' => 'Servicio de consultoría', 'cantidad' => 1, 'valor_unitario' => 100, 'afectacion' => '10'],
@@ -33,8 +33,11 @@ $r = $fs->comprobantes->emitir([
 echo $r['aceptado_por_sunat'] ? 'Aceptado ' : 'NO aceptado ', $r['serie_numero'];
 ```
 
-> **`baseUrl` no es igual para todos.** Cada cuenta vive en un servidor distinto: copia la
-> "URL base de la API" de tu panel de integrador (pestaña Configuración).
+Con una llave de formato nuevo (`fs_live_…` / `fs_test_…`) no hace falta `baseUrl`: el cliente usa
+`https://app.factusmart.pe/api/v1/issuer`.
+
+> **¿Llave del formato anterior?** Pasa `baseUrl` con la "URL base de la API" de tu panel de integrador
+> (pestaña Configuración), o pide tu llave nueva en el panel y ya no la necesitarás.
 
 Hay un ejemplo completo en [`ejemplos/emitir_boleta.php`](ejemplos/emitir_boleta.php).
 
@@ -60,13 +63,13 @@ Revisa también `entorno` (`prueba` / `produccion`) y `tiene_validez_fiscal`: ca
 | Opción | Obligatoria | Default | Nota |
 |---|---|---|---|
 | `apiKey` | sí | — | va en el header `X-API-Key` |
-| `baseUrl` | sí | — | la URL de tu panel, ej. `https://s2.factusmart.pe/api/v1/issuer` |
+| `baseUrl` | no | `https://app.factusmart.pe/api/v1/issuer` | obligatoria solo con llaves del formato anterior (la URL de tu panel); si la pasas, se usa tal cual |
 | `ruc` | no | — | RUC emisor por defecto; se puede cambiar por llamada con `['ruc' => ...]` |
 | `timeout` | no | `60` | segundos (SUNAT a veces tarda) |
 | `maxReintentos` | no | `3` | ver "Reintentos" |
 | `verificarSsl` | no | `true` | ponlo en `false` **solo** para pruebas locales con certificado propio |
 
-Si falta `apiKey` o `baseUrl` se lanza `FactuSmartError` de inmediato.
+Si falta `apiKey`, o falta `baseUrl` con una llave del formato anterior, se lanza `FactuSmartError` de inmediato.
 
 ## Métodos
 
